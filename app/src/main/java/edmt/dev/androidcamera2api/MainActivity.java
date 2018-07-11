@@ -23,6 +23,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
@@ -69,6 +70,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
+
+    //Test
+    private Long expUpper;
+    private Long expLower;
+    private Integer senUpper;
+    private Integer senLower;
+    private Long fraUpper;
+    private Long fraLower;
 
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
@@ -135,6 +144,20 @@ public class MainActivity extends AppCompatActivity {
             final CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             captureBuilder.addTarget(reader.getSurface());
             captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
+
+            //Test
+
+            /*
+            expLower = captureBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME);
+            senUpper = captureBuilder.get(CaptureRequest.SENSOR_SENSITIVITY);
+            fraUpper = captureBuilder.get(CaptureRequest.SENSOR_FRAME_DURATION);
+            */
+
+            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
+            captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
+            captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
+            captureBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
+
 
             //Check orientation base on device
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
@@ -219,6 +242,12 @@ public class MainActivity extends AppCompatActivity {
             texture.setDefaultBufferSize(imageDimension.getWidth(),imageDimension.getHeight());
             Surface surface = new Surface(texture);
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+
+            captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
+
             captureRequestBuilder.addTarget(surface);
             cameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
                 @Override
@@ -256,6 +285,22 @@ public class MainActivity extends AppCompatActivity {
         try{
             cameraId = manager.getCameraIdList()[0];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+
+            //Test
+            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            expUpper = (Long) expRange.getUpper();
+            expLower = (Long) expRange.getLower();
+
+            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            senUpper = (Integer) senRange.getUpper();
+            senLower = (Integer) senRange.getLower();
+
+            expLower = (Long) (long) (1000000000/20);
+            senUpper = (Integer) (int) 3200;
+            fraUpper = (Long) (long) 60;
+
+
+
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             assert map != null;
             imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
