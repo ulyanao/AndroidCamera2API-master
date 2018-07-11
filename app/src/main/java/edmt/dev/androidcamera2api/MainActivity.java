@@ -163,19 +163,13 @@ public class MainActivity extends AppCompatActivity {
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,ORIENTATIONS.get(rotation));
 
-            file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture.yuv");
+            file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+".yuv");
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     Image image = null;
                     try{
                         image = reader.acquireLatestImage();
-                        /*
-                        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-                        byte[] bytes = new byte[buffer.capacity()];
-                        buffer.get(bytes);
-                        save(bytes);
-                        */
 
                         Image.Plane Y = image.getPlanes()[0];
                         Image.Plane U = image.getPlanes()[1];
@@ -313,8 +307,8 @@ public class MainActivity extends AppCompatActivity {
             senUpper = (Integer) senRange.getUpper();
             senLower = (Integer) senRange.getLower();
 
-            expLower = (Long) (long) (1000000000/20);
-            senUpper = (Integer) (int) 3200;
+            expLower = (Long) (long) (1000000000/8000);
+            senUpper = (Integer) (int) 100;
             fraUpper = (Long) (long) 60;
 
 
