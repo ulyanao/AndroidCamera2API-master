@@ -32,6 +32,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -131,10 +132,11 @@ public class MainActivity extends AppCompatActivity {
             //Capture image with custom size
             int width = 640;
             int height = 480;
+            //size is from 0(biggest) to length-1(highest)
             if(jpegSizes != null && jpegSizes.length > 0)
             {
-                width = jpegSizes[0].getWidth();
-                height = jpegSizes[0].getHeight();
+                width = jpegSizes[jpegSizes.length-1].getWidth();
+                height = jpegSizes[jpegSizes.length-1].getHeight();
             }
             final ImageReader reader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
             List<Surface> outputSurface = new ArrayList<>(2);
@@ -144,8 +146,6 @@ public class MainActivity extends AppCompatActivity {
             final CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
             captureBuilder.addTarget(reader.getSurface());
             captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-
-            //Test
 
             /*
             expLower = captureBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME);
@@ -163,14 +163,18 @@ public class MainActivity extends AppCompatActivity {
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,ORIENTATIONS.get(rotation));
 
-            file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+".yuv");
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     Image image = null;
                     try{
                         image = reader.acquireLatestImage();
+                        //get real height and width, if reader has not possible size, image uses the nearest
+                        int width = image.getWidth();
+                        int height = image.getHeight();
+                        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+".yuv");
 
+                        //Create image yuv out of planes
                         Image.Plane Y = image.getPlanes()[0];
                         Image.Plane U = image.getPlanes()[1];
                         Image.Plane V = image.getPlanes()[2];
@@ -179,13 +183,28 @@ public class MainActivity extends AppCompatActivity {
                         int Ub = U.getBuffer().remaining();
                         int Vb = V.getBuffer().remaining();
 
+                        //The data buffer
                         byte[] data = new byte[Yb + Ub + Vb];
 
-
+                        //Add data to buffer
                         Y.getBuffer().get(data, 0, Yb);
                         U.getBuffer().get(data, Yb, Ub);
                         V.getBuffer().get(data, Yb + Ub, Vb);
 
+
+                        //write buffer to txt
+                        DataOutputStream dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
+                        int i=1;
+                        for(int n=0; n<Yb;n++) {
+                            dataOutputStream.writeBytes(Integer.toString(data[n])+"; ");
+                            if((n+1)%width==0){
+                                dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
+                                i++;
+                            }
+                        }
+                        dataOutputStream.close();
+
+                        //Save the image from buffer of data
                         save(data);
                     }
                     catch (FileNotFoundException e)
@@ -307,7 +326,7 @@ public class MainActivity extends AppCompatActivity {
             senUpper = (Integer) senRange.getUpper();
             senLower = (Integer) senRange.getLower();
 
-            expLower = (Long) (long) (1000000000/8000);
+            expLower = (Long) (long) (1000000000/16000);
             senUpper = (Integer) (int) 100;
             fraUpper = (Long) (long) 60;
 
