@@ -46,6 +46,8 @@ import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
+    //<editor-fold desc="Declarations">
+    //User interface
     private Button btnCapture;
     private TextureView textureView;
 
@@ -58,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
         ORIENTATIONS.append(Surface.ROTATION_270,180);
     }
 
+    //Camera variables
     private String cameraId;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSessions;
@@ -72,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
 
-    //Test
+    //Manual camera settings
     private Long expUpper;
     private Long expLower;
     private Integer senUpper;
@@ -80,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
     private Long fraUpper;
     private Long fraLower;
 
+    //Callback of camera device
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
@@ -99,7 +103,31 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    //Listener for texture surface
+    TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
+            openCamera();
+        }
 
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
+
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            return false;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
+
+        }
+    };
+    //</editor-fold>
+
+    //<editor-fold desc="Activity creator">
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -117,7 +145,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    //</editor-fold>
 
+    //<editor-fold desc="Main methods">
+    /**
+     * Method takes picture, it sets up the camera session and saves the image to file
+     */
     private void takePicture() {
         if(cameraDevice == null)
             return;
@@ -132,27 +165,32 @@ public class MainActivity extends AppCompatActivity {
             //Capture image with custom size
             int width = 640;
             int height = 480;
-            //size is from 0(biggest) to length-1(highest)
+            //Size is from 0(biggest) to length-1(highest)
             if(jpegSizes != null && jpegSizes.length > 0)
             {
                 width = jpegSizes[jpegSizes.length-1].getWidth();
                 height = jpegSizes[jpegSizes.length-1].getHeight();
             }
+            //Set up image reader with custom size and format
             final ImageReader reader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
             List<Surface> outputSurface = new ArrayList<>(2);
             outputSurface.add(reader.getSurface());
             outputSurface.add(new Surface(textureView.getSurfaceTexture()));
 
+            //Set up capture builder with all parameters
             final CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            //Reader surface is passed to capture builder to pass its image in there
             captureBuilder.addTarget(reader.getSurface());
             captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
 
+            //Get current manual parameters
             /*
             expLower = captureBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME);
             senUpper = captureBuilder.get(CaptureRequest.SENSOR_SENSITIVITY);
             fraUpper = captureBuilder.get(CaptureRequest.SENSOR_FRAME_DURATION);
             */
 
+            //Set manual parameters
             captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
             captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
             captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
@@ -163,15 +201,19 @@ public class MainActivity extends AppCompatActivity {
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,ORIENTATIONS.get(rotation));
 
+            //<editor-fold desc="Listener of image reader">
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
+                //If image is passed to surface by capturing, the image is available in th reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     Image image = null;
                     try{
+                        //Get image from image reader
                         image = reader.acquireLatestImage();
-                        //get real height and width, if reader has not possible size, image uses the nearest
+                        //Get real height and width, if reader has not possible size, image uses the nearest
                         int width = image.getWidth();
                         int height = image.getHeight();
+                        //set up the file path
                         file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+".yuv");
 
                         //Create image yuv out of planes
@@ -183,7 +225,7 @@ public class MainActivity extends AppCompatActivity {
                         int Ub = U.getBuffer().remaining();
                         int Vb = V.getBuffer().remaining();
 
-                        //The data buffer
+                        //The data buffer where the data of the image is stored
                         byte[] data = new byte[Yb + Ub + Vb];
 
                         //Add data to buffer
@@ -192,8 +234,9 @@ public class MainActivity extends AppCompatActivity {
                         V.getBuffer().get(data, Yb + Ub, Vb);
 
 
-                        //write buffer to txt
+                        //Set up output file of text file with buffer data
                         DataOutputStream dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
+                        //The loop is writing byte after byte to the output stream
                         int i=1;
                         for(int n=0; n<Yb;n++) {
                             dataOutputStream.writeBytes(Integer.toString(data[n])+"; ");
@@ -204,7 +247,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         dataOutputStream.close();
 
-                        //Save the image from buffer of data
+                        //Save the image the data buffer
                         save(data);
                     }
                     catch (FileNotFoundException e)
@@ -222,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 }
+                //Saves the image data in the output stream as a picture
                 private void save(byte[] bytes) throws IOException {
                     OutputStream outputStream = null;
                     try{
@@ -233,9 +277,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             };
+            //</editor-fold>
 
+            //Image reader is set to image reader listener
             reader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
+
+            //Sets up listener of capture process
             final CameraCaptureSession.CaptureCallback captureListener = new CameraCaptureSession.CaptureCallback() {
+                //When picture captured, shows toast and creates the preview again
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
@@ -244,10 +293,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
+            //Sets up capture session callback
             cameraDevice.createCaptureSession(outputSurface, new CameraCaptureSession.StateCallback() {
+                //When session is configured, session captures(capture builder is built) => image is sent to surface of reader
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                     try{
+                        //The capture command
                         cameraCaptureSession.capture(captureBuilder.build(),captureListener,mBackgroundHandler);
                     } catch (CameraAccessException e) {
                         e.printStackTrace();
@@ -266,6 +318,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Creates the camera preview
+     */
     private void createCameraPreview() {
         try{
             SurfaceTexture texture = textureView.getSurfaceTexture();
@@ -299,6 +354,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Updates the camera preview
+     */
     private void updatePreview() {
         if(cameraDevice == null)
             Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
@@ -311,13 +369,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    /**
+     * Opens the camera, first initialization
+     */
     private void openCamera() {
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
             cameraId = manager.getCameraIdList()[0];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
 
-            //Test
+            //Sets the manual exposure values
             Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
             expUpper = (Long) expRange.getUpper();
             expLower = (Long) expRange.getLower();
@@ -329,7 +390,6 @@ public class MainActivity extends AppCompatActivity {
             expLower = (Long) (long) (1000000000/16000);
             senUpper = (Integer) (int) 100;
             fraUpper = (Long) (long) 60;
-
 
 
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -350,29 +410,9 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+    //</editor-fold>
 
-    TextureView.SurfaceTextureListener textureListener = new TextureView.SurfaceTextureListener() {
-        @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int i, int i1) {
-            openCamera();
-        }
-
-        @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int i, int i1) {
-
-        }
-
-        @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
-            return false;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
-
-        }
-    };
-
+    //<editor-fold desc="Sub methods">
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
        if(requestCode == REQUEST_CAMERA_PERMISSION)
@@ -417,4 +457,5 @@ public class MainActivity extends AppCompatActivity {
         mBackgroundThread.start();
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
+    //</editor-fold>
 }
