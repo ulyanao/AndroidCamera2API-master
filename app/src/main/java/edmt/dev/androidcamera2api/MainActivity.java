@@ -90,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             cameraDevice = camera;
-            createCameraPreview();
+            setUpCamera();
         }
 
         @Override
@@ -391,21 +391,10 @@ public class MainActivity extends AppCompatActivity {
     private void openCamera() {
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
+            //Get Camera ID
             cameraId = manager.getCameraIdList()[0];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
 
-            //Sets the manual exposure values
-            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
-            expUpper = (Long) expRange.getUpper();
-            expLower = (Long) expRange.getLower();
-
-            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
-            senUpper = (Integer) senRange.getUpper();
-            senLower = (Integer) senRange.getLower();
-
-            expLower = (Long) (long) (1000000000/16000);
-            senUpper = (Integer) (int) 100;
-            fraUpper = (Long) (long) 60;
 
             //Stuff with permission and things I don't understand
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -421,6 +410,33 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            //This calls the setUpCamera method to set up the camera parameters
+            manager.openCamera(cameraId,stateCallback,null);
+
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void setUpCamera() {
+        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
+        try{
+            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+
+            //Sets the manual exposure values
+            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            expUpper = (Long) expRange.getUpper();
+            expLower = (Long) expRange.getLower();
+
+            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            senUpper = (Integer) senRange.getUpper();
+            senLower = (Integer) senRange.getLower();
+
+            expLower = (Long) (long) (1000000000/16000);
+            senUpper = (Integer) (int) 100;
+            fraUpper = (Long) (long) 60;
+
+
             //New code to initialize
             Size[] jpegSizes = null;
             if(characteristics != null)
@@ -430,7 +446,7 @@ public class MainActivity extends AppCompatActivity {
             //Capture image with custom size
             int width = 640;
             int height = 480;
-            //Size is from 0(biggest) to length-1(highest)
+            //Size is from 0(biggest) to length-1(smallest)
             if(jpegSizes != null && jpegSizes.length > 0)
             {
                 width = jpegSizes[jpegSizes.length-1].getWidth();
@@ -439,9 +455,6 @@ public class MainActivity extends AppCompatActivity {
             //Set up image reader with custom size and format
             imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
             imageCounter = 0;
-
-
-
 
 
             //<editor-fold desc="Listener of image reader">
@@ -537,17 +550,18 @@ public class MainActivity extends AppCompatActivity {
             //Image reader is set to image reader listener
             imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
 
-
-
-            //End of new code
-
-            //This calls the createCapturePreview method
-            manager.openCamera(cameraId,stateCallback,null);
+            createCameraPreview();
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
+
     }
+
+    private void captureCompleted() {
+
+    }
+
     //</editor-fold>
 
     //<editor-fold desc="Sub methods">
