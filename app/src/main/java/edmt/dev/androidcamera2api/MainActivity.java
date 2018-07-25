@@ -75,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
+    private int imageCounter;
 
     //Manual camera settings
     private Long expUpper;
@@ -324,19 +325,31 @@ public class MainActivity extends AppCompatActivity {
      */
     private void createCameraPreview() {
         try{
+            //This is to create the surface of the preview texture field
             SurfaceTexture texture = textureView.getSurfaceTexture();
             assert  texture != null;
             texture.setDefaultBufferSize(imageDimension.getWidth(),imageDimension.getHeight());
+            //The surface of the preview texture
             Surface surface = new Surface(texture);
-            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            //This is to create the surface to capture the image to the reader
+            Surface imageSurface = imageReader.getSurface();
 
+            List<Surface> outputSurface = new ArrayList<>(2);
+            outputSurface.add(imageSurface);
+            outputSurface.add(surface);
+
+            //Set up the capture Builder with settings
+            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
             captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
             captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
             captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
 
+            //Add target to Builder - both the texture field and the reader
             captureRequestBuilder.addTarget(surface);
-            cameraDevice.createCaptureSession(Arrays.asList(surface), new CameraCaptureSession.StateCallback() {
+            captureRequestBuilder.addTarget(imageSurface);
+
+            cameraDevice.createCaptureSession(outputSurface, new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                     if(cameraDevice == null)
@@ -356,13 +369,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Updates the camera preview
+     * Updates the camera preview, or more it starts capturing the frames and paths them to the surfaces of the session
      */
     private void updatePreview() {
         if(cameraDevice == null)
             Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
-        captureRequestBuilder.set(CaptureRequest.CONTROL_MODE,CaptureRequest.CONTROL_MODE_AUTO);
+        //Doesn't do anything,don't know why but I took it out, just to be sure, as it should not set the mode back to auto
+        //captureRequestBuilder.set(CaptureRequest.CONTROL_MODE,CaptureRequest.CONTROL_MODE_AUTO);
         try{
+            //This says that it should repeatedly capture frames with the settings set
             cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(),null,mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -392,11 +407,11 @@ public class MainActivity extends AppCompatActivity {
             senUpper = (Integer) (int) 100;
             fraUpper = (Long) (long) 60;
 
-
+            //Stuff with permission and things I don't understand
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             assert map != null;
             imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
-            //Check realtime permission if run higher API 23
+            //Check real time permission if run higher API 23
             if(ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
             {
                 ActivityCompat.requestPermissions(this,new String[]{
@@ -405,6 +420,128 @@ public class MainActivity extends AppCompatActivity {
                 },REQUEST_CAMERA_PERMISSION);
                 return;
             }
+
+            //New code to initialize
+            Size[] jpegSizes = null;
+            if(characteristics != null)
+                jpegSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                        .getOutputSizes(ImageFormat.YUV_420_888);
+
+            //Capture image with custom size
+            int width = 640;
+            int height = 480;
+            //Size is from 0(biggest) to length-1(highest)
+            if(jpegSizes != null && jpegSizes.length > 0)
+            {
+                width = jpegSizes[jpegSizes.length-1].getWidth();
+                height = jpegSizes[jpegSizes.length-1].getHeight();
+            }
+            //Set up image reader with custom size and format
+            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
+            imageCounter = 0;
+
+
+
+
+
+            //<editor-fold desc="Listener of image reader">
+            ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
+                //If image is passed to surface by capturing, the image is available in th reader and this method is called
+                @Override
+                public void onImageAvailable(ImageReader imageReader) {
+                    Image image = null;
+                    try{
+                        //Get image from image reader
+                        image = imageReader.acquireLatestImage();
+                        //Set imageCounter
+                        imageCounter++;
+                        //Get real height and width, if reader has not possible size, image uses the nearest
+                        int width = image.getWidth();
+                        int height = image.getHeight();
+                        //set up the file path
+                        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+imageCounter+".yuv");
+
+                        //Create image yuv out of planes
+                        Image.Plane Y = image.getPlanes()[0];
+                        Image.Plane U = image.getPlanes()[1];
+                        Image.Plane V = image.getPlanes()[2];
+
+                        int Yb = Y.getBuffer().remaining();
+                        int Ub = U.getBuffer().remaining();
+                        int Vb = V.getBuffer().remaining();
+
+                        //The data buffer where the data of the image is stored
+                        byte[] data = new byte[Yb + Ub + Vb];
+
+                        //Add data to buffer
+                        Y.getBuffer().get(data, 0, Yb);
+                        U.getBuffer().get(data, Yb, Ub);
+                        V.getBuffer().get(data, Yb + Ub, Vb);
+
+
+                        //Set up output file of text file with buffer data
+                        DataOutputStream dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
+                        //The loop is writing byte after byte to the output stream
+                        dataOutputStream.writeBytes("A new picture is captured:\n\n\n");
+                        int i=1;
+                        for(int n=0; n<Yb;n++) {
+                            dataOutputStream.writeBytes(Integer.toString(data[n])+"; ");
+                            if((n+1)%width==0){
+                                dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
+                                i++;
+                            }
+                        }
+                        dataOutputStream.close();
+
+                        //Save the image to the data buffer
+                        save(data);
+
+                        //End everything if
+                        try{
+                            if(imageCounter>=2) {
+                                cameraCaptureSessions.stopRepeating();
+                            }
+                        } catch (CameraAccessException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    catch (FileNotFoundException e)
+                    {
+                        e.printStackTrace();
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace();
+                    }
+                    finally {
+                        {
+                            if(image != null)
+                                image.close();
+                        }
+                    }
+                }
+                //Saves the image data in the output stream as a picture
+                private void save(byte[] bytes) throws IOException {
+                    OutputStream outputStream = null;
+                    try{
+                        outputStream = new FileOutputStream(file);
+                        outputStream.write(bytes);
+                    }finally {
+                        if(outputStream != null)
+                            outputStream.close();
+                    }
+                }
+            };
+            //</editor-fold>
+
+            //Image reader is set to image reader listener
+            imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
+
+
+
+            //End of new code
+
+            //This calls the createCapturePreview method
             manager.openCamera(cameraId,stateCallback,null);
 
         } catch (CameraAccessException e) {
