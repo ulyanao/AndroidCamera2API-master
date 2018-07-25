@@ -20,6 +20,7 @@ import android.media.ImageReader;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -68,6 +69,8 @@ public class MainActivity extends AppCompatActivity {
     private CaptureRequest.Builder captureRequestBuilder;
     private Size imageDimension;
     private ImageReader imageReader;
+    private int width;
+    private int height;
 
     //Save to FILE
     private File file;
@@ -76,6 +79,8 @@ public class MainActivity extends AppCompatActivity {
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
     private int imageCounter;
+    private List<byte[]> dataImages = new ArrayList<>();
+    private int dataYLength;
 
     //Manual camera settings
     private Long expUpper;
@@ -444,8 +449,8 @@ public class MainActivity extends AppCompatActivity {
                         .getOutputSizes(ImageFormat.YUV_420_888);
 
             //Capture image with custom size
-            int width = 640;
-            int height = 480;
+            width = 640;
+            height = 480;
             //Size is from 0(biggest) to length-1(smallest)
             if(jpegSizes != null && jpegSizes.length > 0)
             {
@@ -458,21 +463,13 @@ public class MainActivity extends AppCompatActivity {
 
 
             //<editor-fold desc="Listener of image reader">
-            ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
+            final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 //If image is passed to surface by capturing, the image is available in th reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
-                    Image image = null;
-                    try{
+                    try {
                         //Get image from image reader
-                        image = imageReader.acquireLatestImage();
-                        //Set imageCounter
-                        imageCounter++;
-                        //Get real height and width, if reader has not possible size, image uses the nearest
-                        int width = image.getWidth();
-                        int height = image.getHeight();
-                        //set up the file path
-                        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+imageCounter+".yuv");
+                        Image image = imageReader.acquireLatestImage();
 
                         //Create image yuv out of planes
                         Image.Plane Y = image.getPlanes()[0];
@@ -492,58 +489,27 @@ public class MainActivity extends AppCompatActivity {
                         V.getBuffer().get(data, Yb + Ub, Vb);
 
 
-                        //Set up output file of text file with buffer data
-                        DataOutputStream dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
-                        //The loop is writing byte after byte to the output stream
-                        dataOutputStream.writeBytes("A new picture is captured:\n\n\n");
-                        int i=1;
-                        for(int n=0; n<Yb;n++) {
-                            dataOutputStream.writeBytes(Integer.toString(data[n])+"; ");
-                            if((n+1)%width==0){
-                                dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
-                                i++;
-                            }
+                        //Close image
+                        image.close();
+
+                        dataImages.add(data);
+
+                        //Check if end recording frames
+                        if (imageCounter == 60) {
+                            cameraCaptureSessions.stopRepeating();
+                            imageReader.close();
+                            dataYLength = Yb;
+                            captureCompleted();
                         }
-                        dataOutputStream.close();
 
-                        //Save the image to the data buffer
-                        save(data);
-
-                        //End everything if
-                        try{
-                            if(imageCounter>=2) {
-                                cameraCaptureSessions.stopRepeating();
-                            }
-                        } catch (CameraAccessException e) {
+                        //Set imageCounter
+                        imageCounter++;
+                    }
+                    catch(CameraAccessException e) {
                             e.printStackTrace();
-                        }
-                    }
-                    catch (FileNotFoundException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    finally {
-                        {
-                            if(image != null)
-                                image.close();
-                        }
                     }
                 }
-                //Saves the image data in the output stream as a picture
-                private void save(byte[] bytes) throws IOException {
-                    OutputStream outputStream = null;
-                    try{
-                        outputStream = new FileOutputStream(file);
-                        outputStream.write(bytes);
-                    }finally {
-                        if(outputStream != null)
-                            outputStream.close();
-                    }
-                }
+
             };
             //</editor-fold>
 
@@ -559,7 +525,53 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void captureCompleted() {
+        try {
 
+            for(int n=0; n<=imageCounter; n++) {
+
+                save(dataImages.get(n),n);
+
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+
+    }
+
+    //Saves the image data in the output stream as a picture
+    private void save(byte[] bytes, int imageCounter) throws IOException {
+        //set up the file path
+        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+imageCounter+".yuv");
+        //Stream of image
+        OutputStream outputStream = null;
+        //Stream of text file
+        DataOutputStream dataOutputStream = null;
+        try{
+            dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
+            outputStream = new FileOutputStream(file);
+
+            outputStream.write(bytes);
+
+            dataOutputStream.writeBytes("A new picture is captured:\n\n\n");
+            int i=1;
+            for(int n=0; n<dataYLength;n++) {
+                dataOutputStream.writeBytes(Integer.toString(bytes[n])+"; ");
+                if((n+1)%width==0){
+                    dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
+                    i++;
+                }
+            }
+
+
+        }finally {
+            if(outputStream != null)
+                outputStream.close();
+            if(dataOutputStream != null)
+                dataOutputStream.close();
+        }
     }
 
     //</editor-fold>
