@@ -80,7 +80,6 @@ public class MainActivity extends AppCompatActivity {
     private HandlerThread mBackgroundThread;
     private int imageCounter;
     private List<byte[]> dataImages = new ArrayList<>();
-    private int dataYLength;
     private boolean recordingData;
 
     //Manual camera settings
@@ -478,7 +477,6 @@ public class MainActivity extends AppCompatActivity {
                         U.getBuffer().get(data, Yb, Ub);
                         V.getBuffer().get(data, Yb + Ub, Vb);
 
-
                         //Close image
                         image.close();
 
@@ -492,7 +490,6 @@ public class MainActivity extends AppCompatActivity {
                             if (imageCounter == 1) {
                                 cameraCaptureSessions.stopRepeating();
                                 imageReader.close();
-                                dataYLength = Yb;
                                 captureCompleted();
                             }
 
@@ -543,11 +540,15 @@ public class MainActivity extends AppCompatActivity {
     private void captureCompleted() {
         try {
 
-            for(int n=0; n<=1; n++) {
+            for(int n=0; n<=imageCounter; n++) {
 
                 save(dataImages.get(n),n);
 
             }
+
+            Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+
+            updatePreview();
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -558,9 +559,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //Saves the image data in the output stream as a picture
-    private void save(byte[] bytes, int imageCounter) throws IOException {
+    private void save(byte[] bytes, int currentImage) throws IOException {
         //set up the file path
-        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+imageCounter+".yuv");
+        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
         //Stream of image
         OutputStream outputStream = null;
         //Stream of text file
@@ -573,7 +574,7 @@ public class MainActivity extends AppCompatActivity {
 
             dataOutputStream.writeBytes("A new picture is captured:\n\n\n");
             int i=1;
-            for(int n=0; n<dataYLength;n++) {
+            for(int n=0; n<(width*height);n++) {
                 dataOutputStream.writeBytes(Integer.toString(bytes[n])+"; ");
                 if((n+1)%width==0){
                     dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
