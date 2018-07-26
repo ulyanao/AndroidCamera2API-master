@@ -81,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
     private int imageCounter;
     private List<byte[]> dataImages = new ArrayList<>();
     private int dataYLength;
+    private boolean recordingData;
 
     //Manual camera settings
     private Long expUpper;
@@ -148,7 +149,7 @@ public class MainActivity extends AppCompatActivity {
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                takePicture();
+                recordingData = !recordingData;
             }
         });
     }
@@ -427,22 +428,10 @@ public class MainActivity extends AppCompatActivity {
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+            StreamConfigurationMap configs = characteristics.get(
+                    CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
-            //Sets the manual exposure values
-            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
-            expUpper = (Long) expRange.getUpper();
-            expLower = (Long) expRange.getLower();
-
-            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
-            senUpper = (Integer) senRange.getUpper();
-            senLower = (Integer) senRange.getLower();
-
-            expLower = (Long) (long) (1000000000/16000);
-            senUpper = (Integer) (int) 100;
-            fraUpper = (Long) (long) 60;
-
-
-            //New code to initialize
+            //Set size of image reader
             Size[] jpegSizes = null;
             if(characteristics != null)
                 jpegSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
@@ -460,6 +449,7 @@ public class MainActivity extends AppCompatActivity {
             //Set up image reader with custom size and format
             imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
             imageCounter = 0;
+            recordingData = false;
 
 
             //<editor-fold desc="Listener of image reader">
@@ -492,18 +482,27 @@ public class MainActivity extends AppCompatActivity {
                         //Close image
                         image.close();
 
-                        dataImages.add(data);
+                        //Check if recording on
+                        if(recordingData == true) {
+                            //Add data to buffer
+                            dataImages.add(data);
 
-                        //Check if end recording frames
-                        if (imageCounter == 60) {
-                            cameraCaptureSessions.stopRepeating();
-                            imageReader.close();
-                            dataYLength = Yb;
-                            captureCompleted();
+
+                            //Check if end of recording frames
+                            if (imageCounter == 1) {
+                                cameraCaptureSessions.stopRepeating();
+                                imageReader.close();
+                                dataYLength = Yb;
+                                captureCompleted();
+                            }
+
+
+                            //Set imageCounter
+                            imageCounter++;
                         }
 
-                        //Set imageCounter
-                        imageCounter++;
+
+
                     }
                     catch(CameraAccessException e) {
                             e.printStackTrace();
@@ -516,6 +515,23 @@ public class MainActivity extends AppCompatActivity {
             //Image reader is set to image reader listener
             imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
 
+            //Sets the manual exposure values
+            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
+            expUpper = (Long) expRange.getUpper();
+            expLower = (Long) expRange.getLower();
+
+            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
+            senUpper = (Integer) senRange.getUpper();
+            senLower = (Integer) senRange.getLower();
+
+
+            long fraMin = configs.getOutputMinFrameDuration(ImageFormat.YUV_420_888,new Size(width,height));
+
+            expLower = (Long) (long) (1000000000/16000);
+            senUpper = (Integer) (int) 100;
+            fraUpper = (Long) (long) 1000000000/30;
+
+
             createCameraPreview();
 
         } catch (CameraAccessException e) {
@@ -527,7 +543,7 @@ public class MainActivity extends AppCompatActivity {
     private void captureCompleted() {
         try {
 
-            for(int n=0; n<=imageCounter; n++) {
+            for(int n=0; n<=1; n++) {
 
                 save(dataImages.get(n),n);
 

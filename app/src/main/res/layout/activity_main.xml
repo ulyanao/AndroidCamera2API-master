@@ -16,7 +16,7 @@
 
     <Button
         android:id="@+id/btnCapture"
-        android:text="CAPTURE"
+        android:text="Record"
         android:layout_alignParentBottom="true"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" />
