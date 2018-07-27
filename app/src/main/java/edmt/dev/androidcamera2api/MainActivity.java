@@ -446,7 +446,7 @@ public class MainActivity extends AppCompatActivity {
                 height = jpegSizes[jpegSizes.length-1].getHeight();
             }
             //Set up image reader with custom size and format
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
+            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
             imageCounter = 0;
             recordingData = false;
 
@@ -456,54 +456,65 @@ public class MainActivity extends AppCompatActivity {
                 //If image is passed to surface by capturing, the image is available in th reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
-                    try {
-                        //Get image from image reader
-                        Image image = imageReader.acquireLatestImage();
+                    //Get image from image reader
+                    Image image = imageReader.acquireNextImage();
 
-                        //Create image yuv out of planes
-                        Image.Plane Y = image.getPlanes()[0];
-                        Image.Plane U = image.getPlanes()[1];
-                        Image.Plane V = image.getPlanes()[2];
 
-                        int Yb = Y.getBuffer().remaining();
-                        int Ub = U.getBuffer().remaining();
-                        int Vb = V.getBuffer().remaining();
+                    //Create image yuv out of planes
+                    Image.Plane Y = image.getPlanes()[0];
+                    Image.Plane U = image.getPlanes()[1];
+                    Image.Plane V = image.getPlanes()[2];
 
-                        //The data buffer where the data of the image is stored
-                        byte[] data = new byte[Yb + Ub + Vb];
+                    int Yb = Y.getBuffer().remaining();
+                    int Ub = U.getBuffer().remaining();
+                    int Vb = V.getBuffer().remaining();
 
+                    //The data buffer where the data of the image is stored
+                    byte[] data = new byte[Yb + Ub + Vb];
+
+                    //Add data to buffer
+                    Y.getBuffer().get(data, 0, Yb);
+                    U.getBuffer().get(data, Yb, Ub);
+                    V.getBuffer().get(data, Yb + Ub, Vb);
+
+                    //Close image
+                    image.close();
+
+                    //Check if recording on
+                    if(recordingData == true) {
                         //Add data to buffer
-                        Y.getBuffer().get(data, 0, Yb);
-                        U.getBuffer().get(data, Yb, Ub);
-                        V.getBuffer().get(data, Yb + Ub, Vb);
+                        dataImages.add(data);
 
-                        //Close image
-                        image.close();
-
-                        //Check if recording on
-                        if(recordingData == true) {
-                            //Add data to buffer
-                            dataImages.add(data);
+                        /*
+                        1. Take data
+                        2. loop: each line make middle value and save to new buffer, which has height times the middle value
+                            this means we got a waveform
+                        3. new middle value for each line is a polygon trough this waveform
+                            so take these values as a function
+                        4.
 
 
-                            //Check if end of recording frames
-                            if (imageCounter == 1) {
-                                cameraCaptureSessions.stopRepeating();
-                                imageReader.close();
-                                captureCompleted();
-                            }
+                         */
 
 
+
+                        //Check if end of recording frames
+                        if (imageCounter == 1) {
+                            recordingData = false;
+
+                            ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing();
+                            threadImageProcessing.start();
+
+                        } else {
                             //Set imageCounter
                             imageCounter++;
+
                         }
 
 
 
                     }
-                    catch(CameraAccessException e) {
-                            e.printStackTrace();
-                    }
+
                 }
 
             };
@@ -524,8 +535,8 @@ public class MainActivity extends AppCompatActivity {
 
             long fraMin = configs.getOutputMinFrameDuration(ImageFormat.YUV_420_888,new Size(width,height));
 
-            expLower = (Long) (long) (1000000000/16000);
-            senUpper = (Integer) (int) 100;
+            expLower = (Long) (long) (1000000000/1000);
+            senUpper = (Integer) (int) 3200;
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -546,9 +557,13 @@ public class MainActivity extends AppCompatActivity {
 
             }
 
-            Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+            dataImages.clear();
+            imageCounter=0;
 
-            updatePreview();
+
+            //Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+
+            //updatePreview();
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -639,4 +654,12 @@ public class MainActivity extends AppCompatActivity {
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
     //</editor-fold>
+
+    public class ThreadImageProcessing extends Thread {
+
+        public void run() {
+            captureCompleted();
+        }
+
+    }
 }
