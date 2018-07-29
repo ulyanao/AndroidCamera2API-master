@@ -20,11 +20,11 @@ import android.media.ImageReader;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.provider.ContactsContract;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
@@ -40,17 +40,12 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
+import static java.lang.Math.abs;
 
 public class MainActivity extends AppCompatActivity {
 
-    //<editor-fold desc="Declarations">
-    //User interface
-    private Button btnCapture;
     private TextureView textureView;
 
     //Check state orientation of output image
@@ -73,14 +68,14 @@ public class MainActivity extends AppCompatActivity {
     private int height;
 
     //Save to FILE
-    private File file;
     private static final int REQUEST_CAMERA_PERMISSION = 200;
     private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
-    private int imageCounter;
-    private List<byte[]> dataImages = new ArrayList<>();
-    private boolean recordingData;
+    private final ImageData imageData = new ImageData();
+    public boolean recordingData;
+
+
 
     //Manual camera settings
     private Long expUpper;
@@ -144,7 +139,7 @@ public class MainActivity extends AppCompatActivity {
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
         textureView.setSurfaceTextureListener(textureListener);
-        btnCapture = (Button)findViewById(R.id.btnCapture);
+        Button btnCapture = (Button) findViewById(R.id.btnCapture);
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -155,176 +150,6 @@ public class MainActivity extends AppCompatActivity {
     //</editor-fold>
 
     //<editor-fold desc="Main methods">
-    /**
-     * Method takes picture, it sets up the camera session and saves the image to file
-     */
-    private void takePicture() {
-        if(cameraDevice == null)
-            return;
-        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
-        try{
-            CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraDevice.getId());
-            Size[] jpegSizes = null;
-            if(characteristics != null)
-                jpegSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                        .getOutputSizes(ImageFormat.YUV_420_888);
-
-            //Capture image with custom size
-            int width = 640;
-            int height = 480;
-            //Size is from 0(biggest) to length-1(highest)
-            if(jpegSizes != null && jpegSizes.length > 0)
-            {
-                width = jpegSizes[jpegSizes.length-1].getWidth();
-                height = jpegSizes[jpegSizes.length-1].getHeight();
-            }
-            //Set up image reader with custom size and format
-            final ImageReader reader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
-            List<Surface> outputSurface = new ArrayList<>(2);
-            outputSurface.add(reader.getSurface());
-            outputSurface.add(new Surface(textureView.getSurfaceTexture()));
-
-            //Set up capture builder with all parameters
-            final CaptureRequest.Builder captureBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
-            //Reader surface is passed to capture builder to pass its image in there
-            captureBuilder.addTarget(reader.getSurface());
-            captureBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-
-            //Get current manual parameters
-            /*
-            expLower = captureBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME);
-            senUpper = captureBuilder.get(CaptureRequest.SENSOR_SENSITIVITY);
-            fraUpper = captureBuilder.get(CaptureRequest.SENSOR_FRAME_DURATION);
-            */
-
-            //Set manual parameters
-            captureBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
-            captureBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
-            captureBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
-            captureBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
-
-
-            //Check orientation base on device
-            int rotation = getWindowManager().getDefaultDisplay().getRotation();
-            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,ORIENTATIONS.get(rotation));
-
-            //<editor-fold desc="Listener of image reader">
-            ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
-                //If image is passed to surface by capturing, the image is available in th reader and this method is called
-                @Override
-                public void onImageAvailable(ImageReader imageReader) {
-                    Image image = null;
-                    try{
-                        //Get image from image reader
-                        image = reader.acquireLatestImage();
-                        //Get real height and width, if reader has not possible size, image uses the nearest
-                        int width = image.getWidth();
-                        int height = image.getHeight();
-                        //set up the file path
-                        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+".yuv");
-
-                        //Create image yuv out of planes
-                        Image.Plane Y = image.getPlanes()[0];
-                        Image.Plane U = image.getPlanes()[1];
-                        Image.Plane V = image.getPlanes()[2];
-
-                        int Yb = Y.getBuffer().remaining();
-                        int Ub = U.getBuffer().remaining();
-                        int Vb = V.getBuffer().remaining();
-
-                        //The data buffer where the data of the image is stored
-                        byte[] data = new byte[Yb + Ub + Vb];
-
-                        //Add data to buffer
-                        Y.getBuffer().get(data, 0, Yb);
-                        U.getBuffer().get(data, Yb, Ub);
-                        V.getBuffer().get(data, Yb + Ub, Vb);
-
-
-                        //Set up output file of text file with buffer data
-                        DataOutputStream dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
-                        //The loop is writing byte after byte to the output stream
-                        int i=1;
-                        for(int n=0; n<Yb;n++) {
-                            dataOutputStream.writeBytes(Integer.toString(data[n])+"; ");
-                            if((n+1)%width==0){
-                                dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
-                                i++;
-                            }
-                        }
-                        dataOutputStream.close();
-
-                        //Save the image the data buffer
-                        save(data);
-                    }
-                    catch (FileNotFoundException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    finally {
-                        {
-                            if(image != null)
-                                image.close();
-                        }
-                    }
-                }
-                //Saves the image data in the output stream as a picture
-                private void save(byte[] bytes) throws IOException {
-                    OutputStream outputStream = null;
-                    try{
-                        outputStream = new FileOutputStream(file);
-                        outputStream.write(bytes);
-                    }finally {
-                        if(outputStream != null)
-                            outputStream.close();
-                    }
-                }
-            };
-            //</editor-fold>
-
-            //Image reader is set to image reader listener
-            reader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
-
-            //Sets up listener of capture process
-            final CameraCaptureSession.CaptureCallback captureListener = new CameraCaptureSession.CaptureCallback() {
-                //When picture captured, shows toast and creates the preview again
-                @Override
-                public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
-                    super.onCaptureCompleted(session, request, result);
-                    Toast.makeText(MainActivity.this, "Saved "+file, Toast.LENGTH_SHORT).show();
-                    createCameraPreview();
-                }
-            };
-
-            //Sets up capture session callback
-            cameraDevice.createCaptureSession(outputSurface, new CameraCaptureSession.StateCallback() {
-                //When session is configured, session captures(capture builder is built) => image is sent to surface of reader
-                @Override
-                public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
-                    try{
-                        //The capture command
-                        cameraCaptureSession.capture(captureBuilder.build(),captureListener,mBackgroundHandler);
-                    } catch (CameraAccessException e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void onConfigureFailed(@NonNull CameraCaptureSession cameraCaptureSession) {
-
-                }
-            },mBackgroundHandler);
-
-
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-    }
-
     /**
      * Creates the camera preview
      */
@@ -431,24 +256,22 @@ public class MainActivity extends AppCompatActivity {
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
             //Set size of image reader
-            Size[] jpegSizes = null;
+            Size[] yuvSizes = null;
             if(characteristics != null)
-                jpegSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                yuvSizes = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                         .getOutputSizes(ImageFormat.YUV_420_888);
 
             //Capture image with custom size
             width = 640;
             height = 480;
             //Size is from 0(biggest) to length-1(smallest)
-            if(jpegSizes != null && jpegSizes.length > 0)
+            if(yuvSizes != null && yuvSizes.length > 0)
             {
-                width = jpegSizes[jpegSizes.length-1].getWidth();
-                height = jpegSizes[jpegSizes.length-1].getHeight();
+                width = yuvSizes[yuvSizes.length-1].getWidth();
+                height = yuvSizes[yuvSizes.length-1].getHeight();
             }
             //Set up image reader with custom size and format
             imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
-            imageCounter = 0;
-            recordingData = false;
 
 
             //<editor-fold desc="Listener of image reader">
@@ -459,61 +282,31 @@ public class MainActivity extends AppCompatActivity {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
+                    if (recordingData) {
 
-                    //Create image yuv out of planes
-                    Image.Plane Y = image.getPlanes()[0];
-                    Image.Plane U = image.getPlanes()[1];
-                    Image.Plane V = image.getPlanes()[2];
+                        //Create image yuv out of planes
+                        Image.Plane Y = image.getPlanes()[0];
+                        Image.Plane U = image.getPlanes()[1];
+                        Image.Plane V = image.getPlanes()[2];
 
-                    int Yb = Y.getBuffer().remaining();
-                    int Ub = U.getBuffer().remaining();
-                    int Vb = V.getBuffer().remaining();
+                        int Yb = Y.getBuffer().remaining();
+                        int Ub = U.getBuffer().remaining();
+                        int Vb = V.getBuffer().remaining();
 
-                    //The data buffer where the data of the image is stored
-                    byte[] data = new byte[Yb + Ub + Vb];
+                        //The data buffer where the data of the image is stored
+                        byte[] data = new byte[Yb + Ub + Vb];
 
-                    //Add data to buffer
-                    Y.getBuffer().get(data, 0, Yb);
-                    U.getBuffer().get(data, Yb, Ub);
-                    V.getBuffer().get(data, Yb + Ub, Vb);
+                        //Add data to buffer
+                        Y.getBuffer().get(data, 0, Yb);
+                        U.getBuffer().get(data, Yb, Ub);
+                        V.getBuffer().get(data, Yb + Ub, Vb);
 
-                    //Close image
+                        //Start thread to process image data
+                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data, image.getHeight(),image.getWidth());
+                        threadImageProcessing.start();
+                    }
                     image.close();
 
-                    //Check if recording on
-                    if(recordingData == true) {
-                        //Add data to buffer
-                        dataImages.add(data);
-
-                        /*
-                        1. Take data
-                        2. loop: each line make middle value and save to new buffer, which has height times the middle value
-                            this means we got a waveform
-                        3. new middle value for each line is a polygon trough this waveform
-                            so take these values as a function
-                        4.
-
-
-                         */
-
-
-
-                        //Check if end of recording frames
-                        if (imageCounter == 1) {
-                            recordingData = false;
-
-                            ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing();
-                            threadImageProcessing.start();
-
-                        } else {
-                            //Set imageCounter
-                            imageCounter++;
-
-                        }
-
-
-
-                    }
 
                 }
 
@@ -532,11 +325,8 @@ public class MainActivity extends AppCompatActivity {
             senUpper = (Integer) senRange.getUpper();
             senLower = (Integer) senRange.getLower();
 
-
-            long fraMin = configs.getOutputMinFrameDuration(ImageFormat.YUV_420_888,new Size(width,height));
-
-            expLower = (Long) (long) (1000000000/1000);
-            senUpper = (Integer) (int) 3200;
+            expLower = (Long) (long) (1000000000/16000);
+            senUpper = (Integer) (int) 100;
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -548,35 +338,10 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void captureCompleted() {
-        try {
-
-            for(int n=0; n<=imageCounter; n++) {
-
-                save(dataImages.get(n),n);
-
-            }
-
-            dataImages.clear();
-            imageCounter=0;
-
-
-            //Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
-
-            //updatePreview();
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-
-
-    }
-
     //Saves the image data in the output stream as a picture
     private void save(byte[] bytes, int currentImage) throws IOException {
         //set up the file path
-        file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
+        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
         //Stream of image
         OutputStream outputStream = null;
         //Stream of text file
@@ -604,6 +369,28 @@ public class MainActivity extends AppCompatActivity {
             if(dataOutputStream != null)
                 dataOutputStream.close();
         }
+    }
+
+    private void saveYData(int[] data, int currentImage) throws IOException{
+        //set up the file path
+        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
+        //Stream of text file
+        DataOutputStream dataOutputStream = null;
+        try{
+            dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv","_onlyYData.txt")));
+
+
+            for(int n=0; n<(height);n++) {
+                dataOutputStream.writeBytes(Integer.toString(data[n])+"\n");
+            }
+            dataOutputStream.writeBytes("The length of the data int: "+Integer.toString(data.length));
+
+
+        }finally {
+            if(dataOutputStream != null)
+                dataOutputStream.close();
+        }
+
     }
 
     //</editor-fold>
@@ -655,10 +442,129 @@ public class MainActivity extends AppCompatActivity {
     }
     //</editor-fold>
 
-    public class ThreadImageProcessing extends Thread {
+    public class ThreadSaveData extends Thread {
+
 
         public void run() {
-            captureCompleted();
+            Log.d("Image","The saving Thread is started: "+Thread.currentThread().getName());
+            synchronized (imageData) {
+                Log.d("Image","The saving Thread accesses the data: "+Thread.currentThread().getName());
+                try {
+
+                    for(int n=0; n<imageData.dataY.size(); n++) {
+
+                        save(imageData.dataYUV.get(n),n);
+                        saveYData(imageData.dataY.get(n),n);
+
+                    }
+                    imageData.dataY.clear();
+                    imageData.dataYUV.clear();
+                    imageData.lastFrameCaptured=false;
+                    Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
+                    Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
+
+                    //Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    public class ThreadImageProcessing extends Thread {
+
+        byte[] data;
+        int imageWidth;
+        int imageHeight;
+
+        ThreadImageProcessing(byte[] data, int imageHeight, int imageWidth) {
+            this.data = data;
+            this.imageHeight = imageHeight;
+            this.imageWidth = imageWidth;
+        }
+
+        public void run() {
+
+            Log.d("Image","New Thread started: "+Thread.currentThread().getName());
+            //<editor-fold desc="Step1: get image data">
+
+            /*
+            //Create image yuv out of planes
+            Image.Plane Y = image.getPlanes()[0];
+
+            int Yb = Y.getBuffer().remaining();
+
+            //The data buffer where the data of the image is stored
+            byte[] data = new byte[Yb];
+
+            //Add data to buffer
+            Y.getBuffer().get(data, 0, Yb);
+            */
+            //</editor-fold>
+
+            //<editor-fold desc="Step2: translate to 255">
+            int dataLength = imageHeight*imageWidth;
+            int[] data255 = new int[dataLength];
+
+            for(int i=0;i<dataLength;i++) {
+                if(data[i] < 0) {
+                    data255[i] = (127 + abs(data[i]));
+                }else{
+                    data255[i] = data[i];
+                }
+            }
+            //</editor-fold>
+
+            //<editor-fold desc="Step3: data1Dim">
+            int[] data1Dim = new int[imageHeight];
+
+            long sumOfLine = 0;
+            int counterLines = -1;
+
+            for(int i=0;i<dataLength;i++) {
+                sumOfLine += data255[i];
+                if((i+1)%imageWidth==0) {
+                    counterLines++;
+                    data1Dim[counterLines] = (int) (sumOfLine/imageWidth);
+                    sumOfLine = 0;
+                }
+            }
+            //</editor-fold>
+
+            Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
+            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName());
+
+
+            synchronized (imageData) {
+                if (!imageData.lastFrameCaptured) {
+                    Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
+                    imageData.dataY.add(data1Dim);
+                    imageData.dataYUV.add(data);
+                    if(imageData.dataY.size() >= 1) {
+                        Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
+                        imageData.lastFrameCaptured = true;
+                        recordingData = false;
+                        //New Thread to handle saving
+                        ThreadSaveData threadSaveData = new ThreadSaveData();
+                        threadSaveData.start();
+                    }
+                }
+            }
+
+
+        }
+
+    }
+
+    public class ImageData {
+        public List<byte[]> dataYUV = new ArrayList<>();
+        public List<int[]> dataY = new ArrayList<>();
+        public boolean lastFrameCaptured;
+
+
+        ImageData() {
+            lastFrameCaptured = false;
         }
 
     }
