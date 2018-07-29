@@ -267,8 +267,8 @@ public class MainActivity extends AppCompatActivity {
             //Size is from 0(biggest) to length-1(smallest)
             if(yuvSizes != null && yuvSizes.length > 0)
             {
-                width = yuvSizes[yuvSizes.length-1].getWidth();
-                height = yuvSizes[yuvSizes.length-1].getHeight();
+                width = yuvSizes[0].getWidth();
+                height = yuvSizes[0].getHeight();
             }
             //Set up image reader with custom size and format
             imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
@@ -286,20 +286,14 @@ public class MainActivity extends AppCompatActivity {
 
                         //Create image yuv out of planes
                         Image.Plane Y = image.getPlanes()[0];
-                        Image.Plane U = image.getPlanes()[1];
-                        Image.Plane V = image.getPlanes()[2];
 
                         int Yb = Y.getBuffer().remaining();
-                        int Ub = U.getBuffer().remaining();
-                        int Vb = V.getBuffer().remaining();
 
                         //The data buffer where the data of the image is stored
-                        byte[] data = new byte[Yb + Ub + Vb];
+                        byte[] data = new byte[Yb];
 
                         //Add data to buffer
                         Y.getBuffer().get(data, 0, Yb);
-                        U.getBuffer().get(data, Yb, Ub);
-                        V.getBuffer().get(data, Yb + Ub, Vb);
 
                         //Start thread to process image data
                         ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data, image.getHeight(),image.getWidth());
@@ -338,47 +332,13 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    //Saves the image data in the output stream as a picture
-    private void save(byte[] bytes, int currentImage) throws IOException {
-        //set up the file path
-        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
-        //Stream of image
-        OutputStream outputStream = null;
-        //Stream of text file
-        DataOutputStream dataOutputStream = null;
-        try{
-            dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv",".txt")));
-            outputStream = new FileOutputStream(file);
-
-            outputStream.write(bytes);
-
-            dataOutputStream.writeBytes("A new picture is captured:\n\n\n");
-            int i=1;
-            for(int n=0; n<(width*height);n++) {
-                dataOutputStream.writeBytes(Integer.toString(bytes[n])+"; ");
-                if((n+1)%width==0){
-                    dataOutputStream.writeBytes("___The line "+i+" and the width "+(n+1)/i+"\n");
-                    i++;
-                }
-            }
-
-
-        }finally {
-            if(outputStream != null)
-                outputStream.close();
-            if(dataOutputStream != null)
-                dataOutputStream.close();
-        }
-    }
-
     private void saveYData(int[] data, int currentImage) throws IOException{
         //set up the file path
-        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+".yuv");
+        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"+_YData.txt");
         //Stream of text file
         DataOutputStream dataOutputStream = null;
         try{
-            dataOutputStream = new DataOutputStream(new FileOutputStream(file.getPath().replace(".yuv","_onlyYData.txt")));
-
+            dataOutputStream = new DataOutputStream(new FileOutputStream(file));
 
             for(int n=0; n<(height);n++) {
                 dataOutputStream.writeBytes(Integer.toString(data[n])+"\n");
@@ -453,13 +413,11 @@ public class MainActivity extends AppCompatActivity {
 
                     for(int n=0; n<imageData.dataY.size(); n++) {
 
-                        save(imageData.dataYUV.get(n),n);
                         saveYData(imageData.dataY.get(n),n);
 
                     }
                     imageData.dataY.clear();
-                    imageData.dataYUV.clear();
-                    imageData.lastFrameCaptured=false;
+                    //imageData.lastFrameCaptured=false;
                     Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
 
@@ -540,7 +498,6 @@ public class MainActivity extends AppCompatActivity {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
                     imageData.dataY.add(data1Dim);
-                    imageData.dataYUV.add(data);
                     if(imageData.dataY.size() >= 1) {
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
                         imageData.lastFrameCaptured = true;
@@ -549,6 +506,8 @@ public class MainActivity extends AppCompatActivity {
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
                     }
+                } else {
+                    Log.d("Image","Thread didnt save data, as after saving was done: "+Thread.currentThread().getName());
                 }
             }
 
@@ -558,10 +517,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class ImageData {
-        public List<byte[]> dataYUV = new ArrayList<>();
         public List<int[]> dataY = new ArrayList<>();
         public boolean lastFrameCaptured;
-
 
         ImageData() {
             lastFrameCaptured = false;
