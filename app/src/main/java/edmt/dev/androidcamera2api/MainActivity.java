@@ -11,9 +11,7 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -33,13 +31,10 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import static java.lang.Math.abs;
@@ -74,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
     private HandlerThread mBackgroundThread;
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
+    public int test = 0;
 
 
 
@@ -282,10 +278,13 @@ public class MainActivity extends AppCompatActivity {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData) {
+                    if (recordingData && test == 0) {
+                        //I have to destroy the variables afterwards
+                        test =1;
 
                         //Create image yuv out of planes
                         Image.Plane Y = image.getPlanes()[0];
+
 
                         int Yb = Y.getBuffer().remaining();
 
@@ -296,7 +295,7 @@ public class MainActivity extends AppCompatActivity {
                         Y.getBuffer().get(data, 0, Yb);
 
                         //Start thread to process image data
-                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data, image.getHeight(),image.getWidth());
+                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone(), image.getHeight(),image.getWidth());
                         threadImageProcessing.start();
                     }
                     image.close();
@@ -340,8 +339,38 @@ public class MainActivity extends AppCompatActivity {
         try{
             dataOutputStream = new DataOutputStream(new FileOutputStream(file));
 
+
+
+            int high = 0;
+            int low = 0;
+            boolean over = false;
             for(int n=0; n<(height);n++) {
+
+                if(data[n]>=20) {
+                    if(over) {
+                        high++;
+                    }else {
+                        dataOutputStream.writeBytes("There are so many under: " + low + "\n");
+                        over = true;
+                        low=0;
+                        high++;
+                    }
+                } else {
+                    if(!over) {
+                        low++;
+                    } else {
+                        dataOutputStream.writeBytes("There are so many over: " + high + "\n");
+                        over = false;
+                        high = 0;
+                        low++;
+                    }
+                }
                 dataOutputStream.writeBytes(Integer.toString(data[n])+"\n");
+            }
+            if(over){
+                dataOutputStream.writeBytes("There are so many over: " + high + "\n");
+            } else {
+                dataOutputStream.writeBytes("There are so many under: " + low + "\n");
             }
             dataOutputStream.writeBytes("The length of the data int: "+Integer.toString(data.length));
 
@@ -402,10 +431,17 @@ public class MainActivity extends AppCompatActivity {
     }
     //</editor-fold>
 
-    public class ThreadSaveData extends Thread {
+    //<editor-fold desc="Threads">
+    private class ThreadSaveData extends Thread {
 
 
         public void run() {
+            try {
+                Thread.currentThread().sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
             Log.d("Image","The saving Thread is started: "+Thread.currentThread().getName());
             synchronized (imageData) {
                 Log.d("Image","The saving Thread accesses the data: "+Thread.currentThread().getName());
@@ -421,7 +457,12 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
 
-                    //Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+                        }
+                    });
 
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -430,7 +471,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public class ThreadImageProcessing extends Thread {
+    private class ThreadImageProcessing extends Thread {
 
         byte[] data;
         int imageWidth;
@@ -447,18 +488,7 @@ public class MainActivity extends AppCompatActivity {
             Log.d("Image","New Thread started: "+Thread.currentThread().getName());
             //<editor-fold desc="Step1: get image data">
 
-            /*
-            //Create image yuv out of planes
-            Image.Plane Y = image.getPlanes()[0];
 
-            int Yb = Y.getBuffer().remaining();
-
-            //The data buffer where the data of the image is stored
-            byte[] data = new byte[Yb];
-
-            //Add data to buffer
-            Y.getBuffer().get(data, 0, Yb);
-            */
             //</editor-fold>
 
             //<editor-fold desc="Step2: translate to 255">
@@ -500,8 +530,14 @@ public class MainActivity extends AppCompatActivity {
                     imageData.dataY.add(data1Dim);
                     if(imageData.dataY.size() >= 1) {
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                recordingData = false;
+                                Toast.makeText(MainActivity.this, "Image saving has started!", Toast.LENGTH_SHORT).show();
+                            }
+                        });
                         imageData.lastFrameCaptured = true;
-                        recordingData = false;
                         //New Thread to handle saving
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
@@ -525,4 +561,5 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
+    //</editor-fold>
 }
