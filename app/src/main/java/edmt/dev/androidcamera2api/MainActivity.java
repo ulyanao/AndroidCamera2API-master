@@ -1,5 +1,4 @@
 package edmt.dev.androidcamera2api;
-//Test for pc syncing
 
 import android.Manifest;
 import android.content.Context;
@@ -41,6 +40,7 @@ import static java.lang.Math.abs;
 
 public class MainActivity extends AppCompatActivity {
 
+    //<editor-fold desc="Declaration">
     private TextureView textureView;
 
     //Check state orientation of output image
@@ -67,9 +67,16 @@ public class MainActivity extends AppCompatActivity {
     private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
+
+    //Image processing
+    private Image image;
+    private byte[] data;
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
-    public int test = 0;
+    long startTime;
+    long endTime;
+
+    private int test = 0;
 
 
 
@@ -267,7 +274,9 @@ public class MainActivity extends AppCompatActivity {
                 height = yuvSizes[0].getHeight();
             }
             //Set up image reader with custom size and format
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
+            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
+            //Set up the data which stores the data of the image plane
+            data = new byte[width*height];
 
 
             //<editor-fold desc="Listener of image reader">
@@ -275,32 +284,23 @@ public class MainActivity extends AppCompatActivity {
                 //If image is passed to surface by capturing, the image is available in th reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
+                    startTime = System.nanoTime();
                     //Get image from image reader
-                    Image image = imageReader.acquireNextImage();
+                    image = imageReader.acquireNextImage();
 
                     if (recordingData && test == 0) {
-                        //I have to destroy the variables afterwards
-                        test =1;
+                        test = 1;
+                        //Get y plane of image and path buffer to data
+                        image.getPlanes()[0].getBuffer().get(data);
 
-                        //Create image yuv out of planes
-                        Image.Plane Y = image.getPlanes()[0];
-
-
-                        int Yb = Y.getBuffer().remaining();
-
-                        //The data buffer where the data of the image is stored
-                        byte[] data = new byte[Yb];
-
-                        //Add data to buffer
-                        Y.getBuffer().get(data, 0, Yb);
-
-                        //Start thread to process image data
-                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone(), image.getHeight(),image.getWidth());
+                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone());
                         threadImageProcessing.start();
                     }
+
                     image.close();
 
-
+                    endTime = System.nanoTime();
+                    Log.d("Image", "Time image reader: " + ((endTime-startTime)/100000));
                 }
 
             };
@@ -453,7 +453,7 @@ public class MainActivity extends AppCompatActivity {
 
                     }
                     imageData.dataY.clear();
-                    //imageData.lastFrameCaptured=false;
+                    imageData.lastFrameCaptured=false;
                     Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
 
@@ -477,15 +477,18 @@ public class MainActivity extends AppCompatActivity {
         int imageWidth;
         int imageHeight;
 
-        ThreadImageProcessing(byte[] data, int imageHeight, int imageWidth) {
+        ThreadImageProcessing(byte[] data) {
+
             this.data = data;
-            this.imageHeight = imageHeight;
-            this.imageWidth = imageWidth;
+            this.imageHeight = height;
+            this.imageWidth = width;
+
         }
 
         public void run() {
 
-            Log.d("Image","New Thread started: "+Thread.currentThread().getName());
+            Log.d("Image","New Thread started: "+Thread.currentThread().getName() + "; Active ones: " +Thread.activeCount());
+
             //<editor-fold desc="Step1: get image data">
 
 
@@ -520,10 +523,9 @@ public class MainActivity extends AppCompatActivity {
             }
             //</editor-fold>
 
-            Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
             Log.d("Image","Thread processed picture: "+Thread.currentThread().getName());
 
-
+            //<editor-fold desc="Saving">
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
@@ -543,10 +545,10 @@ public class MainActivity extends AppCompatActivity {
                         threadSaveData.start();
                     }
                 } else {
-                    Log.d("Image","Thread didnt save data, as after saving was done: "+Thread.currentThread().getName());
+                    Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                 }
             }
-
+            //</editor-fold>
 
         }
 
@@ -561,5 +563,30 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
+
+    private class ThreadImageTest extends Thread {
+
+        private final byte[] data;
+
+        ThreadImageTest(byte[] data) {
+
+
+            this.data = data;
+        }
+
+        public void run() {
+
+            try {
+                Thread.currentThread().sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            data[1] = 1;
+
+        }
+
+    }
+
     //</editor-fold>
 }
