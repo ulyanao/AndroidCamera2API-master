@@ -76,9 +76,6 @@ public class MainActivity extends AppCompatActivity {
     long startTime;
     long endTime;
 
-    private int test = 0;
-
-
 
     //Manual camera settings
     private Long expUpper;
@@ -278,29 +275,34 @@ public class MainActivity extends AppCompatActivity {
             //Set up the data which stores the data of the image plane
             data = new byte[width*height];
 
+            Log.d("Image", "Main this thread: " + Thread.currentThread().getName() + Thread.activeCount());
+
+            ThreadManager.processFrame(new RunableImage());
+
 
             //<editor-fold desc="Listener of image reader">
             final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
-                //If image is passed to surface by capturing, the image is available in th reader and this method is called
+                //If image is passed to surface by capturing, the image is available in the reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     startTime = System.nanoTime();
                     //Get image from image reader
                     image = imageReader.acquireNextImage();
 
-                    if (recordingData && test == 0) {
-                        test = 1;
+                    if (recordingData) {
                         //Get y plane of image and path buffer to data
                         image.getPlanes()[0].getBuffer().get(data);
 
-                        ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone());
-                        threadImageProcessing.start();
+                        //ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone());
+                        //threadImageProcessing.start();
+
                     }
+
 
                     image.close();
 
                     endTime = System.nanoTime();
-                    Log.d("Image", "Time image reader: " + ((endTime-startTime)/100000));
+                    //Log.d("Image", "Time image reader: " + ((endTime-startTime)/100000));
                 }
 
             };
@@ -562,6 +564,14 @@ public class MainActivity extends AppCompatActivity {
             lastFrameCaptured = false;
         }
 
+    }
+
+    private class RunableImage implements Runnable {
+
+        @Override
+        public void run() {
+            Log.d("Image", "it works");
+        }
     }
 
     private class ThreadImageTest extends Thread {
