@@ -1,31 +1,43 @@
 package edmt.dev.androidcamera2api;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 public class ThreadManager {
     //Instance of the Manager
     private static ThreadManager sInstance = new ThreadManager();
-    // Gets the number of available cores
-    private static int NUMBER_OF_CORES;
-    // Sets the amount of time an idle thread waits before terminating
-    private static final int KEEP_ALIVE_TIME = 1;
-    // Sets the Time Unit to seconds
-    private static TimeUnit KEEP_ALIVE_TIME_UNIT;
     //The ThreadPoolExecutor
     private ThreadPoolExecutor mDecoderThreadPool;
+    private FrameThreadFactory frameThreadFactory = new FrameThreadFactory();
 
     private ThreadManager() {
-        KEEP_ALIVE_TIME_UNIT =  TimeUnit.NANOSECONDS;
-        NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors();
-        BlockingQueue<Runnable> mDecodeWorkQueue = new LinkedBlockingQueue<>();
-        mDecoderThreadPool = new ThreadPoolExecutor(NUMBER_OF_CORES,NUMBER_OF_CORES,KEEP_ALIVE_TIME,KEEP_ALIVE_TIME_UNIT, mDecodeWorkQueue);
+        //Initialization of ThreadPool
+        int NUMBER_OF_CORES = Runtime.getRuntime().availableProcessors();
+        TimeUnit KEEP_ALIVE_TIME_UNIT = TimeUnit.NANOSECONDS;
+        int KEEP_ALIVE_TIME = 1;
+        BlockingQueue<Runnable> mDecodeWorkQueue = new ArrayBlockingQueue<>(10);
+        mDecoderThreadPool = new ThreadPoolExecutor(NUMBER_OF_CORES, NUMBER_OF_CORES, KEEP_ALIVE_TIME, KEEP_ALIVE_TIME_UNIT, mDecodeWorkQueue,frameThreadFactory);
     }
 
-    static public void processFrame(Runnable runnable) {
-        sInstance.mDecoderThreadPool.execute(runnable);
+    public static ThreadManager getInstance() {
+        return sInstance;
+    }
+
+    public void processFrame(Runnable runnable) {
+        mDecoderThreadPool.execute(runnable);
+    }
+
+    class FrameThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread t = new Thread(runnable);
+            t.setPriority(Thread.NORM_PRIORITY+1);
+            return t;
+        }
     }
 
 }

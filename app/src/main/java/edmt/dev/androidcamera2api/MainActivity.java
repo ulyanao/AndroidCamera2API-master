@@ -36,7 +36,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import static java.lang.Math.abs;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -69,12 +68,12 @@ public class MainActivity extends AppCompatActivity {
     private HandlerThread mBackgroundThread;
 
     //Image processing
-    private Image image;
-    private byte[] data;
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
     long startTime;
     long endTime;
+    long middleTime =330;
+    short test = 0;
 
 
     //Manual camera settings
@@ -271,14 +270,8 @@ public class MainActivity extends AppCompatActivity {
                 height = yuvSizes[0].getHeight();
             }
             //Set up image reader with custom size and format
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,10);
-            //Set up the data which stores the data of the image plane
-            data = new byte[width*height];
-
-            Log.d("Image", "Main this thread: " + Thread.currentThread().getName() + Thread.activeCount());
-
-            ThreadManager.processFrame(new RunableImage());
-
+            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
+            recordingData = true;
 
             //<editor-fold desc="Listener of image reader">
             final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
@@ -287,21 +280,29 @@ public class MainActivity extends AppCompatActivity {
                 public void onImageAvailable(ImageReader imageReader) {
                     startTime = System.nanoTime();
                     //Get image from image reader
-                    image = imageReader.acquireNextImage();
+                    Image image = imageReader.acquireNextImage();
 
-                    if (recordingData) {
+                    if (recordingData && test < 100) {
+                        //Set up the data which stores the data of the image plane
+                        byte[] data = new byte[width*height];
                         //Get y plane of image and path buffer to data
                         image.getPlanes()[0].getBuffer().get(data);
 
-                        //ThreadImageProcessing threadImageProcessing = new ThreadImageProcessing(data.clone());
-                        //threadImageProcessing.start();
+                        try {
+                            ThreadManager.getInstance().processFrame(new RunnableImage(data.clone(),test, height, width));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                        test++;
 
+                    } else if(test==100){
+                        Log.d("Image", "End and time in middle: " + middleTime);
+                        test=101;
                     }
-
-
                     image.close();
-
                     endTime = System.nanoTime();
+                    middleTime=(middleTime+(endTime-startTime)/100000)/2;
+
                     //Log.d("Image", "Time image reader: " + ((endTime-startTime)/100000));
                 }
 
@@ -428,6 +429,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startBackgroundThread() {
         mBackgroundThread = new HandlerThread("Camera Background");
+        mBackgroundThread.setPriority(Thread.MAX_PRIORITY);
         mBackgroundThread.start();
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
@@ -473,61 +475,63 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class ThreadImageProcessing extends Thread {
+    public class ImageData {
+        public List<int[]> dataY = new ArrayList<>();
+        public ArrayList<Short> listTest = new ArrayList<>();
+        public boolean lastFrameCaptured;
 
-        byte[] data;
-        int imageWidth;
-        int imageHeight;
-
-        ThreadImageProcessing(byte[] data) {
-
-            this.data = data;
-            this.imageHeight = height;
-            this.imageWidth = width;
-
+        ImageData() {
+            lastFrameCaptured = false;
         }
 
+    }
+
+    private class RunnableImage implements Runnable {
+        //Initialization
+        byte[] data;
+        short[] data1Dim;
+        short test;
+        int imageHeight;
+        int imageWidth;
+
+        RunnableImage(byte[] data, short test, int imageHeight, int imageWidth) {
+            this.data = data;
+            this.test = test;
+            this.imageHeight = imageHeight;
+            this.imageWidth = imageWidth;
+        }
+
+        @Override
         public void run() {
+            Log.d("Image","New: "+Thread.currentThread().getName());
 
-            Log.d("Image","New Thread started: "+Thread.currentThread().getName() + "; Active ones: " +Thread.activeCount());
-
-            //<editor-fold desc="Step1: get image data">
-
-
-            //</editor-fold>
-
-            //<editor-fold desc="Step2: translate to 255">
-            int dataLength = imageHeight*imageWidth;
-            int[] data255 = new int[dataLength];
-
-            for(int i=0;i<dataLength;i++) {
-                if(data[i] < 0) {
-                    data255[i] = (127 + abs(data[i]));
-                }else{
-                    data255[i] = data[i];
-                }
-            }
-            //</editor-fold>
-
-            //<editor-fold desc="Step3: data1Dim">
-            int[] data1Dim = new int[imageHeight];
-
-            long sumOfLine = 0;
-            int counterLines = -1;
-
-            for(int i=0;i<dataLength;i++) {
-                sumOfLine += data255[i];
+            data1Dim = new short[imageHeight];
+            short counterLines = -1;
+            int sumOfLine = 0;
+            for(int i=0;i<imageHeight * imageWidth;i++) {
+                sumOfLine += (data[i] & 0xff);
                 if((i+1)%imageWidth==0) {
                     counterLines++;
-                    data1Dim[counterLines] = (int) (sumOfLine/imageWidth);
+                    data1Dim[counterLines] = (short) (sumOfLine/imageWidth);
                     sumOfLine = 0;
                 }
             }
-            //</editor-fold>
 
-            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName());
 
-            //<editor-fold desc="Saving">
+            synchronized (imageData) {
+                Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
+            }
+
+
+
+        }
+    }
+    //</editor-fold>
+}
+
+
+/*
+//<editor-fold desc="Saving">
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
@@ -551,52 +555,4 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             //</editor-fold>
-
-        }
-
-    }
-
-    public class ImageData {
-        public List<int[]> dataY = new ArrayList<>();
-        public boolean lastFrameCaptured;
-
-        ImageData() {
-            lastFrameCaptured = false;
-        }
-
-    }
-
-    private class RunableImage implements Runnable {
-
-        @Override
-        public void run() {
-            Log.d("Image", "it works");
-        }
-    }
-
-    private class ThreadImageTest extends Thread {
-
-        private final byte[] data;
-
-        ThreadImageTest(byte[] data) {
-
-
-            this.data = data;
-        }
-
-        public void run() {
-
-            try {
-                Thread.currentThread().sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-            data[1] = 1;
-
-        }
-
-    }
-
-    //</editor-fold>
-}
+ */
