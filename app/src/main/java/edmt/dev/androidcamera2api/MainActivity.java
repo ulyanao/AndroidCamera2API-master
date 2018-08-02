@@ -278,11 +278,11 @@ public class MainActivity extends AppCompatActivity {
                 //If image is passed to surface by capturing, the image is available in the reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
-                    startTime = System.nanoTime();
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData && test < 100) {
+                    if (recordingData && test < 10) {
+                        startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
                         byte[] data = new byte[width*height];
                         //Get y plane of image and path buffer to data
@@ -295,15 +295,14 @@ public class MainActivity extends AppCompatActivity {
                         }
                         test++;
 
-                    } else if(test==100){
+                        endTime = System.nanoTime();
+                        middleTime=(middleTime+(endTime-startTime)/100000)/2;
+
+                    } else if(test==10){
                         Log.d("Image", "End and time in middle: " + middleTime);
                         test=101;
                     }
                     image.close();
-                    endTime = System.nanoTime();
-                    middleTime=(middleTime+(endTime-startTime)/100000)/2;
-
-                    //Log.d("Image", "Time image reader: " + ((endTime-startTime)/100000));
                 }
 
             };
@@ -334,7 +333,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void saveYData(int[] data, int currentImage) throws IOException{
+    private void saveYData(short[] data, int currentImage) throws IOException{
         //set up the file path
         File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"+_YData.txt");
         //Stream of text file
@@ -476,8 +475,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class ImageData {
-        public List<int[]> dataY = new ArrayList<>();
-        public ArrayList<Short> listTest = new ArrayList<>();
+        public List<short[]> dataY = new ArrayList<>();
         public boolean lastFrameCaptured;
 
         ImageData() {
@@ -517,26 +515,12 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-
-            synchronized (imageData) {
-                Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-            }
-
-
-
-        }
-    }
-    //</editor-fold>
-}
-
-
-/*
-//<editor-fold desc="Saving">
+            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
                     imageData.dataY.add(data1Dim);
-                    if(imageData.dataY.size() >= 1) {
+                    if(imageData.dataY.size() >= 10) {
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
                         runOnUiThread(new Runnable() {
                             @Override
@@ -554,5 +538,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                 }
             }
-            //</editor-fold>
- */
+        }
+    }
+    //</editor-fold>
+}
