@@ -12,7 +12,6 @@ public class ThreadManager {
     private static ThreadManager sInstance = new ThreadManager();
     //The ThreadPoolExecutor
     private ThreadPoolExecutor mDecoderThreadPool;
-    private FrameThreadFactory frameThreadFactory = new FrameThreadFactory();
 
     private ThreadManager() {
         //Initialization of ThreadPool
@@ -20,15 +19,15 @@ public class ThreadManager {
         TimeUnit KEEP_ALIVE_TIME_UNIT = TimeUnit.NANOSECONDS;
         int KEEP_ALIVE_TIME = 1;
         BlockingQueue<Runnable> mDecodeWorkQueue = new ArrayBlockingQueue<>(10);
-        mDecoderThreadPool = new ThreadPoolExecutor(NUMBER_OF_CORES, NUMBER_OF_CORES, KEEP_ALIVE_TIME, KEEP_ALIVE_TIME_UNIT, mDecodeWorkQueue,frameThreadFactory);
+        mDecoderThreadPool = new ThreadPoolExecutor(NUMBER_OF_CORES, NUMBER_OF_CORES, KEEP_ALIVE_TIME, KEEP_ALIVE_TIME_UNIT, mDecodeWorkQueue,new FrameThreadFactory());
     }
 
     public static ThreadManager getInstance() {
         return sInstance;
     }
 
-    public void processFrame(Runnable runnable) {
-        mDecoderThreadPool.execute(runnable);
+    public ThreadPoolExecutor getmDecoderThreadPool() {
+        return mDecoderThreadPool;
     }
 
     class FrameThreadFactory implements ThreadFactory {

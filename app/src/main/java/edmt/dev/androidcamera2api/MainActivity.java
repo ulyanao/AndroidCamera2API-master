@@ -33,6 +33,7 @@ import android.widget.Toast;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -143,6 +144,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 recordingData = !recordingData;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(MainActivity.this, "Image saving has started!", Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
         });
     }
@@ -271,7 +278,7 @@ public class MainActivity extends AppCompatActivity {
             }
             //Set up image reader with custom size and format
             imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
-            recordingData = true;
+            recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
             final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
@@ -281,15 +288,15 @@ public class MainActivity extends AppCompatActivity {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData && test < 10) {
+                    if (recordingData) {
                         startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
-                        byte[] data = new byte[width*height];
+                        byte[] data = new byte[image.getWidth()*image.getHeight()];
                         //Get y plane of image and path buffer to data
                         image.getPlanes()[0].getBuffer().get(data);
 
                         try {
-                            ThreadManager.getInstance().processFrame(new RunnableImage(data.clone(),test, height, width));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone(),test, image.getHeight(), image.getWidth()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -298,7 +305,7 @@ public class MainActivity extends AppCompatActivity {
                         endTime = System.nanoTime();
                         middleTime=(middleTime+(endTime-startTime)/100000)/2;
 
-                    } else if(test==10){
+                    } else if(test==-1){
                         Log.d("Image", "End and time in middle: " + middleTime);
                         test=101;
                     }
@@ -312,6 +319,7 @@ public class MainActivity extends AppCompatActivity {
             imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
 
             //Sets the manual exposure values
+            /*
             Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
             expUpper = (Long) expRange.getUpper();
             expLower = (Long) expRange.getLower();
@@ -319,9 +327,10 @@ public class MainActivity extends AppCompatActivity {
             Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
             senUpper = (Integer) senRange.getUpper();
             senLower = (Integer) senRange.getLower();
+            */
 
-            expLower = (Long) (long) (1000000000/16000);
-            senUpper = (Integer) (int) 100;
+            expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
+            senUpper = (Integer) (int) 100;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -332,58 +341,25 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
-
     private void saveYData(short[] data, int currentImage) throws IOException{
         //set up the file path
-        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"+_YData.txt");
+        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"_YData.csv");
         //Stream of text file
-        DataOutputStream dataOutputStream = null;
+        FileWriter fileWriter = null;
         try{
-            dataOutputStream = new DataOutputStream(new FileOutputStream(file));
+            fileWriter = new FileWriter(file);
 
-
-
-            int high = 0;
-            int low = 0;
-            boolean over = false;
             for(int n=0; n<(height);n++) {
-
-                if(data[n]>=20) {
-                    if(over) {
-                        high++;
-                    }else {
-                        dataOutputStream.writeBytes("There are so many under: " + low + "\n");
-                        over = true;
-                        low=0;
-                        high++;
-                    }
-                } else {
-                    if(!over) {
-                        low++;
-                    } else {
-                        dataOutputStream.writeBytes("There are so many over: " + high + "\n");
-                        over = false;
-                        high = 0;
-                        low++;
-                    }
-                }
-                dataOutputStream.writeBytes(Integer.toString(data[n])+"\n");
+                fileWriter.write(Integer.toString(n+1)+", ");
+                fileWriter.write(Integer.toString(data[n])+"\n");
             }
-            if(over){
-                dataOutputStream.writeBytes("There are so many over: " + high + "\n");
-            } else {
-                dataOutputStream.writeBytes("There are so many under: " + low + "\n");
-            }
-            dataOutputStream.writeBytes("The length of the data int: "+Integer.toString(data.length));
-
 
         }finally {
-            if(dataOutputStream != null)
-                dataOutputStream.close();
+            if(fileWriter != null)
+                fileWriter.close();
         }
 
     }
-
     //</editor-fold>
 
     //<editor-fold desc="Sub methods">
@@ -440,7 +416,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void run() {
             try {
-                Thread.currentThread().sleep(100);
+                Thread.currentThread().sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -457,7 +433,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                     imageData.dataY.clear();
                     imageData.lastFrameCaptured=false;
-                    Log.d("Image","The Thread is active: "+Thread.currentThread().getName()+"  That many active: " + Thread.activeCount());
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
 
                     runOnUiThread(new Runnable() {
@@ -487,7 +462,6 @@ public class MainActivity extends AppCompatActivity {
     private class RunnableImage implements Runnable {
         //Initialization
         byte[] data;
-        short[] data1Dim;
         short test;
         int imageHeight;
         int imageWidth;
@@ -503,7 +477,7 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             Log.d("Image","New: "+Thread.currentThread().getName());
 
-            data1Dim = new short[imageHeight];
+            short[] data1Dim = new short[imageHeight];
             short counterLines = -1;
             int sumOfLine = 0;
             for(int i=0;i<imageHeight * imageWidth;i++) {
@@ -515,24 +489,18 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
-                    Log.d("Image","Thread saves data: "+Thread.currentThread().getName());
+                    Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
                     imageData.dataY.add(data1Dim);
-                    if(imageData.dataY.size() >= 10) {
+                    if(imageData.dataY.size() >= 1) {
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                recordingData = false;
-                                Toast.makeText(MainActivity.this, "Image saving has started!", Toast.LENGTH_SHORT).show();
-                            }
-                        });
+                        recordingData = false;
                         imageData.lastFrameCaptured = true;
                         //New Thread to handle saving
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
+
                     }
                 } else {
                     Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
