@@ -489,6 +489,109 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
+            //Final byte array
+
+            data = new byte[12];         //the byte to capture
+            byte counterData = 0;       //position counter in byte array
+            boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
+            short counterHigh=0;    //counts how many highs in a row
+            short endHigh = -1;     //saves end pixel of a high
+            short startHigh = 0;    //saves start pixel of a high
+            byte lastBit = -1; //-1 nothing, 0 zero last, 1 one last, 2 start bit
+            boolean error = false;
+            for (int i = 0; i<imageHeight; i++) {
+                if(error) {
+                    error = false;
+                    data = new byte[12];
+                    counterData = 0;
+                    lastBit = -1;
+                }
+                if(data1Dim[i]>=70) {   //high point recognized
+                    lastHigh = true;
+                    counterHigh++;
+                } else if(lastHigh) {   //this low but last was high
+                    lastHigh=false;
+                    counterHigh++;
+                } else if(counterHigh != 0) {   //two times low after some highs
+                    counterHigh--;  //counter adjust two last high pixel
+                    if(36<=counterHigh && counterHigh<=40) {    //check if high was startBit without low parts
+                        lastBit = 2;
+                        endHigh = (short) (i - 2);
+                    } else if(13<=counterHigh && counterHigh<=23) { //check if it was a normal high
+                        startHigh = (short) (i - 1 - counterHigh);  //set new start of this normal high
+                        //Only if start bit called
+                        if(endHigh!=-1) {   //only do more if it was not the first high
+                            if(2 <= startHigh-endHigh && startHigh-endHigh <= 8) {  //check if two start highs
+                                //start bit
+                                lastBit = 2;
+                            } else if (lastBit!=-1) {                               //Check if start bit called ones
+                                if(10 <= startHigh-endHigh && startHigh-endHigh <= 20){  //check if 0.2 in between to highs
+                                    //0,2
+                                    if(lastBit == 2 || lastBit == 0) {
+                                        //its a 1
+                                        data[counterData] = 1;
+                                        counterData++;
+                                        lastBit = 1;
+                                    } else {
+                                        //error not possible to have this bit followed by this lows
+                                        error = true;
+                                        Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
+                                    }
+                                } else if(29 <= startHigh-endHigh && startHigh-endHigh <= 40){  //check if 0.4 in between to highs
+                                    //0,4
+                                    if(lastBit == 2 || lastBit == 0) {
+                                        //its a 0
+                                        data[counterData] = 0;
+                                        counterData++;
+                                        lastBit = 0;
+                                    } else {
+                                        //its a 1
+                                        data[counterData] = 1;
+                                        counterData++;
+                                        lastBit = 1;
+                                    }
+                                } else if(44 <= startHigh-endHigh && startHigh-endHigh <= 60){  //check if 0.6 in between to highs
+                                    //0,6
+                                    if(lastBit == 1) {
+                                        //its a 0
+                                        data[counterData] = 0;
+                                        counterData++;
+                                        lastBit = 0;
+                                    } else {
+                                        //error
+                                        Log.d("DataTest", "Error last Bit at 0.6; and at pixel: "+i);
+                                        error = true;
+                                    }
+                                } else {    //some else number of lows in between two highs => sequence is interrupted
+                                    // error
+                                    Log.d("DataTest", "Error strange number of lows; and at pixel: "+i);
+                                    error = true;
+                                }
+
+                                if(counterData==12) {
+                                    //end of byte save it and decode it with 4Bit 6Bit
+                                    Log.d("DataTest", "YEAHHH:  The data is: "+data[0]+data[1]+data[2]+data[3]+data[4]+data[5]+data[6]+data[7]+data[8]+data[9]+data[10]+data[11]);
+                                    //than reset to go new
+                                    error = true;
+                                }
+                            }
+                        }
+                        endHigh = (short) (i - 2);  // a normal high and was processed and now set the end
+                    } else if(counterHigh>=13){
+                        //1. error as sequence is interrupted - too many high values
+                        Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
+                        error = true;
+                        endHigh = -1;   //not a normal high so set back last high value
+                    }
+                        //2. just some strange highs (small ones maybe only) in between highs does not matter
+
+                    //after end of high processed go to 0 again
+                    counterHigh = 0;
+                }
+                //if no high has been - nothing happens in loop and go further in data
+            }
+
+
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
