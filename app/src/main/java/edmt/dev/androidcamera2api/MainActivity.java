@@ -22,7 +22,6 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.Range;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
@@ -30,9 +29,8 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-import java.io.DataOutputStream;
+
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -147,7 +145,7 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        Toast.makeText(MainActivity.this, "Image saving has started!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "Image recording has stated!", Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -300,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
-                        test++;
+                        //test++;
 
                         endTime = System.nanoTime();
                         middleTime=(middleTime+(endTime-startTime)/100000)/2;
@@ -476,7 +474,7 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             Log.d("Image","New: "+Thread.currentThread().getName());
-
+            //data to 1 dimension
             short[] data1Dim = new short[imageHeight];
             short counterLines = -1;
             int sumOfLine = 0;
@@ -488,22 +486,28 @@ public class MainActivity extends AppCompatActivity {
                     sumOfLine = 0;
                 }
             }
+            //Log.d("DataTest","Time: "+(endTime-startTime)/100000);
 
             //Final byte array
-
-            data = new byte[12];         //the byte to capture
-            byte counterData = 0;       //position counter in byte array
+            byte dataCoded = 0;         //The encoded data in 6bit
+            byte dataBuffer;
+            boolean firstPart = true;   //checks if already first 6bit captured of the 12
+            data = new byte[12];         //the byte array where to save the data bytes
+            byte counterBytes = 0;      //counts the bytes
+            byte counterBits = 0;       //counter of captured bits
             boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
             short counterHigh=0;    //counts how many highs in a row
             short endHigh = -1;     //saves end pixel of a high
-            short startHigh = 0;    //saves start pixel of a high
+            short startHigh;    //saves start pixel of a high
             byte lastBit = -1; //-1 nothing, 0 zero last, 1 one last, 2 start bit
             boolean error = false;
             for (int i = 0; i<imageHeight; i++) {
                 if(error) {
                     error = false;
-                    data = new byte[12];
-                    counterData = 0;
+                    dataCoded = 0;
+                    firstPart = true;
+                    data[counterBytes] = 0;
+                    counterBits = 0;
                     lastBit = -1;
                 }
                 if(data1Dim[i]>=70) {   //high point recognized
@@ -529,8 +533,8 @@ public class MainActivity extends AppCompatActivity {
                                     //0,2
                                     if(lastBit == 2 || lastBit == 0) {
                                         //its a 1
-                                        data[counterData] = 1;
-                                        counterData++;
+                                        dataCoded = (byte) ((1 << (5-counterBits) | dataCoded));
+                                        counterBits++;
                                         lastBit = 1;
                                     } else {
                                         //error not possible to have this bit followed by this lows
@@ -541,21 +545,19 @@ public class MainActivity extends AppCompatActivity {
                                     //0,4
                                     if(lastBit == 2 || lastBit == 0) {
                                         //its a 0
-                                        data[counterData] = 0;
-                                        counterData++;
+                                        counterBits++;
                                         lastBit = 0;
                                     } else {
                                         //its a 1
-                                        data[counterData] = 1;
-                                        counterData++;
+                                        dataCoded = (byte) ((1 << (5-counterBits) | dataCoded));
+                                        counterBits++;
                                         lastBit = 1;
                                     }
                                 } else if(44 <= startHigh-endHigh && startHigh-endHigh <= 60){  //check if 0.6 in between to highs
                                     //0,6
                                     if(lastBit == 1) {
                                         //its a 0
-                                        data[counterData] = 0;
-                                        counterData++;
+                                        counterBits++;
                                         lastBit = 0;
                                     } else {
                                         //error
@@ -568,10 +570,21 @@ public class MainActivity extends AppCompatActivity {
                                     error = true;
                                 }
 
-                                if(counterData==12) {
-                                    //end of byte save it and decode it with 4Bit 6Bit
-                                    Log.d("DataTest", "YEAHHH:  The data is: "+data[0]+data[1]+data[2]+data[3]+data[4]+data[5]+data[6]+data[7]+data[8]+data[9]+data[10]+data[11]);
-                                    //than reset to go new
+                                if(counterBits==6 && firstPart) {    //first 6 bit to 4bit
+                                    if ((dataBuffer = decode4Bit6Bit(dataCoded)) != -1) {
+                                        data[counterBytes] = (byte) (dataBuffer << 4);
+                                        counterBits = 0;
+                                        dataCoded = 0;
+                                        firstPart = false;
+                                    } else {
+                                        error = true;
+                                    }
+                                } else if(counterBits == 6) { //last 6 bit to last 4 bit
+                                    if ((dataBuffer = decode4Bit6Bit(dataCoded)) != -1) {
+                                        data[counterBytes] = (byte) (dataBuffer | data[counterBytes]);
+                                        counterBytes++; //to get new bytes of data
+                                    }
+                                    //reset to capture new byte resp. error if = -1
                                     error = true;
                                 }
                             }
@@ -591,13 +604,14 @@ public class MainActivity extends AppCompatActivity {
                 //if no high has been - nothing happens in loop and go further in data
             }
 
-
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) {
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-                    imageData.dataY.add(data1Dim);
-                    if(imageData.dataY.size() >= 1) {
+                    if(data[0] != 0) {
+                        Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                        Log.d("DataResult", "The bytes are: "+(char)data[0]+data[1]+data[2]+data[3]+data[4]+data[5]);
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
+                        imageData.dataY.add(data1Dim);
                         recordingData = false;
                         imageData.lastFrameCaptured = true;
                         //New Thread to handle saving
@@ -609,6 +623,60 @@ public class MainActivity extends AppCompatActivity {
                     Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                 }
             }
+        }
+        private byte decode4Bit6Bit(byte dataCoded) {
+            byte data = -1;
+            switch (dataCoded) {
+                case 14:
+                    data = 0;
+                    break;
+                case 13:
+                    data = 1;
+                    break;
+                case 19:
+                    data = 2;
+                    break;
+                case 22:
+                    data = 3;
+                    break;
+                case 21:
+                    data = 4;
+                    break;
+                case 35:
+                    data = 5;
+                    break;
+                case 38:
+                    data = 6;
+                    break;
+                case 37:
+                    data = 7;
+                    break;
+                case 25:
+                    data = 8;
+                    break;
+                case 26:
+                    data = 9;
+                    break;
+                case 28:
+                    data = 10;
+                    break;
+                case 49:
+                    data = 11;
+                    break;
+                case 50:
+                    data = 12;
+                    break;
+                case 41:
+                    data = 13;
+                    break;
+                case 42:
+                    data = 14;
+                    break;
+                case 44:
+                    data = 15;
+                    break;
+            }
+            return data;    //returns -1 if error
         }
     }
     //</editor-fold>
