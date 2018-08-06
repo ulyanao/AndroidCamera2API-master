@@ -145,12 +145,21 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 recordingData = !recordingData;
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        Toast.makeText(MainActivity.this, "Image recording has stated!", Toast.LENGTH_SHORT).show();
-                    }
-                });
+                if(recordingData) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Image recording has stated!", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Image recording has stopped!", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
             }
         });
     }
@@ -494,16 +503,16 @@ public class MainActivity extends AppCompatActivity {
             boolean error = false;
             for (int i = 0; i<imageHeight; i++) {
                 if(error) {
-                    error = false;
-                    dataEncoded = 0;
-                    data[counterBytes] = 0;
-                    if(part!=0) {
-                        data[counterBytes-1] = 0;
-                        counterBytes--;
+                    error = false;  //reset error flag
+                    dataEncoded = 0;    //the current buffered data is reset
+                    data[counterBytes] = 0; //the already saved data at this position is reset
+                    if(part!=0) {   //if first part of data has already been saved so not part 0 anymore
+                        data[counterBytes-1] = 0;   //than reset las data
+                        counterBytes--; //and change counter again
                     }
-                    part = 0;
-                    counterBits = 0;
-                    lastBit = -1;
+                    part = 0;   //set part to zero again
+                    counterBits = 0;    //counter of captured bits is reset
+                    lastBit = -1;   //the last bit is not available any longer
                 }
                 if(data1Dim[i]>=70) {   //high point recognized
                     lastHigh = true;
@@ -568,10 +577,10 @@ public class MainActivity extends AppCompatActivity {
                                 if(counterBits==6 && part==0) {    //first 6 bit to 4bit
                                     if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
                                         data[counterBytes] = dataBuffer;
-                                        counterBits = 0;
-                                        dataEncoded = 0;
-                                        part = 1;
-                                        counterBytes++; //next byte to capture data
+                                        counterBits = 0;    //reset the counter of how many bits
+                                        dataEncoded = 0;    //reset the data buffer
+                                        part = 1;           //set to new part
+                                        counterBytes++; //set counterBytes higher...
                                     } else {
                                         error = true;
                                     }
@@ -588,6 +597,7 @@ public class MainActivity extends AppCompatActivity {
                                     if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
                                         data[counterBytes] = (byte) (dataBuffer | data[counterBytes]);
                                         counterBytes++; //to get new bytes of data
+                                        part = 0; //to care about the if case in the error handling
                                     }
                                     //reset to capture new byte resp. error if = -1
                                     error = true;
@@ -613,9 +623,11 @@ public class MainActivity extends AppCompatActivity {
                 if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
                     for(int n=0;data[n]!=0 && data[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                        while(imageData.dataStream.size()<data[n]) {
+                            imageData.dataStream.add((byte) 0);
+                        }
                         imageData.dataStream.set(data[n]-1,data[n+1]);
-                        Log.d("DataResult", "The bytes are: "+(char)data[0]+data[1]+data[2]+data[3]+data[4]+data[5]);
-                        if (imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
+                        if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
                             Log.d("TimeCheck", "End and time in middle: " + middleTime);
                             Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
                             runOnUiThread(new Runnable() {
