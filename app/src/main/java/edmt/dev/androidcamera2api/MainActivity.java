@@ -480,9 +480,9 @@ public class MainActivity extends AppCompatActivity {
             //Log.d("DataTest","Time: "+(endTime-startTime)/100000);
 
             //Final byte array
-            byte dataCoded = 0;         //The encoded data in 6bit
+            byte dataEncoded = 0;         //The encoded data in 6bit
             byte dataBuffer;
-            boolean firstPart = true;   //checks if already first 6bit captured of the 12
+            byte part = 0;   //checks if already first 6bit captured of the 12
             data = new byte[12];         //the byte array where to save the data bytes
             byte counterBytes = 0;      //counts the bytes
             byte counterBits = 0;       //counter of captured bits
@@ -495,9 +495,13 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i<imageHeight; i++) {
                 if(error) {
                     error = false;
-                    dataCoded = 0;
-                    firstPart = true;
+                    dataEncoded = 0;
                     data[counterBytes] = 0;
+                    if(part!=0) {
+                        data[counterBytes-1] = 0;
+                        counterBytes--;
+                    }
+                    part = 0;
                     counterBits = 0;
                     lastBit = -1;
                 }
@@ -524,7 +528,7 @@ public class MainActivity extends AppCompatActivity {
                                     //0,2
                                     if(lastBit == 2 || lastBit == 0) {
                                         //its a 1
-                                        dataCoded = (byte) ((1 << (5-counterBits) | dataCoded));
+                                        dataEncoded = (byte) ((1 << (5-counterBits) | dataEncoded));
                                         counterBits++;
                                         lastBit = 1;
                                     } else {
@@ -540,7 +544,7 @@ public class MainActivity extends AppCompatActivity {
                                         lastBit = 0;
                                     } else {
                                         //its a 1
-                                        dataCoded = (byte) ((1 << (5-counterBits) | dataCoded));
+                                        dataEncoded = (byte) ((1 << (5-counterBits) | dataEncoded));
                                         counterBits++;
                                         lastBit = 1;
                                     }
@@ -561,17 +565,27 @@ public class MainActivity extends AppCompatActivity {
                                     error = true;
                                 }
 
-                                if(counterBits==6 && firstPart) {    //first 6 bit to 4bit
-                                    if ((dataBuffer = decode4Bit6Bit(dataCoded)) != -1) {
+                                if(counterBits==6 && part==0) {    //first 6 bit to 4bit
+                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
+                                        data[counterBytes] = dataBuffer;
+                                        counterBits = 0;
+                                        dataEncoded = 0;
+                                        part = 1;
+                                        counterBytes++; //next byte to capture data
+                                    } else {
+                                        error = true;
+                                    }
+                                } else if(counterBits==6 && part == 1) {    //first 6 bit to 4bit
+                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
                                         data[counterBytes] = (byte) (dataBuffer << 4);
                                         counterBits = 0;
-                                        dataCoded = 0;
-                                        firstPart = false;
+                                        dataEncoded = 0;
+                                        part = 2;
                                     } else {
                                         error = true;
                                     }
                                 } else if(counterBits == 6) { //last 6 bit to last 4 bit
-                                    if ((dataBuffer = decode4Bit6Bit(dataCoded)) != -1) {
+                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
                                         data[counterBytes] = (byte) (dataBuffer | data[counterBytes]);
                                         counterBytes++; //to get new bytes of data
                                     }
@@ -598,10 +612,10 @@ public class MainActivity extends AppCompatActivity {
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-                    for(int n=0;data[n]!=0;n++) {   //check if at least one byte of frame readable, than process this byte
-                        imageData.dataStream.add(data[n]);
+                    for(int n=0;data[n]!=0 && data[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                        imageData.dataStream.set(data[n]-1,data[n+1]);
                         Log.d("DataResult", "The bytes are: "+(char)data[0]+data[1]+data[2]+data[3]+data[4]+data[5]);
-                        if (imageData.dataStream.size()==20) {  //my condition to stop
+                        if (imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
                             Log.d("TimeCheck", "End and time in middle: " + middleTime);
                             Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
                             runOnUiThread(new Runnable() {
