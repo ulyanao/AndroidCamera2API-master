@@ -2,6 +2,7 @@ package edmt.dev.androidcamera2api;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
@@ -81,6 +82,9 @@ public class MainActivity extends AppCompatActivity {
     private Integer senLower;
     private Long fraUpper;
     private Long fraLower;
+
+    //Intent
+    public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
 
     //Callback of camera device
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
@@ -418,18 +422,17 @@ public class MainActivity extends AppCompatActivity {
                     imageData.dataY.clear();
                     imageData.lastFrameCaptured=false;
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
-
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+                }
+            });
+
         }
     }
 
@@ -600,6 +603,11 @@ public class MainActivity extends AppCompatActivity {
                         recordingData = false;
                         imageData.dataY.add(data1Dim);
                         imageData.lastFrameCaptured = true;
+                        //start new activity to display output
+                        Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
+                        String message = String.valueOf(data[0])+" "+String.valueOf(data[1])+" "+String.valueOf(data[2])+" "+String.valueOf(data[3]);
+                        intent.putExtra(EXTRA_MESSAGE,message);
+                        startActivity(intent);
                         //New Thread to handle saving
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
