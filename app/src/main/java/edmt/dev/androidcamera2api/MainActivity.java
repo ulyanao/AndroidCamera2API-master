@@ -29,7 +29,6 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -289,27 +288,21 @@ public class MainActivity extends AppCompatActivity {
                     if (recordingData) {
                         startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
-                        byte[] data = new byte[image.getWidth()*image.getHeight()];
+                        byte[] data = new byte[image.getWidth() * image.getHeight()];
                         //Get y plane of image and path buffer to data
                         image.getPlanes()[0].getBuffer().get(data);
 
                         try {
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone(),test, image.getHeight(), image.getWidth()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone(), test, image.getHeight(), image.getWidth()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
-                        //test++;
 
                         endTime = System.nanoTime();
-                        middleTime=(middleTime+(endTime-startTime)/100000)/2;
-
-                    } else if(test==-1){
-                        Log.d("Image", "End and time in middle: " + middleTime);
-                        test=101;
+                        middleTime = (middleTime + (endTime - startTime) / 100000) / 2;
                     }
                     image.close();
                 }
-
             };
             //</editor-fold>
 
@@ -336,25 +329,6 @@ public class MainActivity extends AppCompatActivity {
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
-        }
-
-    }
-    private void saveYData(short[] data, int currentImage) throws IOException{
-        //set up the file path
-        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"_YData.csv");
-        //Stream of text file
-        FileWriter fileWriter = null;
-        try{
-            fileWriter = new FileWriter(file);
-
-            for(int n=0; n<(height);n++) {
-                fileWriter.write(Integer.toString(n+1)+", ");
-                fileWriter.write(Integer.toString(data[n])+"\n");
-            }
-
-        }finally {
-            if(fileWriter != null)
-                fileWriter.close();
         }
 
     }
@@ -411,7 +385,6 @@ public class MainActivity extends AppCompatActivity {
     //<editor-fold desc="Threads">
     private class ThreadSaveData extends Thread {
 
-
         public void run() {
             try {
                 Thread.currentThread().sleep(1000);
@@ -424,9 +397,22 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("Image","The saving Thread accesses the data: "+Thread.currentThread().getName());
                 try {
 
-                    for(int n=0; n<imageData.dataY.size(); n++) {
+                    for(int i=0; i<imageData.dataY.size(); i++) {
+                        //set up the file path
+                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataY.get(i).length+"_"+i+"_YData.csv");
+                        //Stream of text file
+                        FileWriter fileWriter = null;
+                        try{
+                            fileWriter = new FileWriter(file);
 
-                        saveYData(imageData.dataY.get(n),n);
+                            for(int n=0; n<(imageData.dataY.get(i).length);n++) {
+                                fileWriter.write(Integer.toString(n+1)+", ");
+                                fileWriter.write(Integer.toString(imageData.dataY.get(i)[n])+"\n");
+                            }
+                        }finally {
+                            if(fileWriter != null)
+                                fileWriter.close();
+                        }
 
                     }
                     imageData.dataY.clear();
@@ -611,13 +597,12 @@ public class MainActivity extends AppCompatActivity {
                         Log.d("TimeCheck", "End and time in middle: " + middleTime);
                         Log.d("DataResult", "The bytes are: "+(char)data[0]+data[1]+data[2]+data[3]+data[4]+data[5]);
                         Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
-                        imageData.dataY.add(data1Dim);
                         recordingData = false;
+                        imageData.dataY.add(data1Dim);
                         imageData.lastFrameCaptured = true;
                         //New Thread to handle saving
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
-
                     }
                 } else {
                     Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
