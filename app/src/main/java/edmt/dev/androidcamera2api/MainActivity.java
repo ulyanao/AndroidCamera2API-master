@@ -420,6 +420,7 @@ public class MainActivity extends AppCompatActivity {
 
                     }
                     imageData.dataY.clear();
+                    imageData.dataStream.clear();
                     imageData.lastFrameCaptured=false;
                     Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
                 } catch (IOException e) {
@@ -438,6 +439,7 @@ public class MainActivity extends AppCompatActivity {
 
     public class ImageData {
         public List<short[]> dataY = new ArrayList<>();
+        public List<Byte> dataStream = new ArrayList<>();
         public boolean lastFrameCaptured;
 
         ImageData() {
@@ -594,23 +596,37 @@ public class MainActivity extends AppCompatActivity {
             }
 
             synchronized (imageData) {
-                if (!imageData.lastFrameCaptured) {
+                if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-                    if(data[0] != 0) {
-                        Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                    for(int n=0;data[n]!=0;n++) {   //check if at least one byte of frame readable, than process this byte
+                        imageData.dataStream.add(data[n]);
                         Log.d("DataResult", "The bytes are: "+(char)data[0]+data[1]+data[2]+data[3]+data[4]+data[5]);
-                        Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
-                        recordingData = false;
-                        imageData.dataY.add(data1Dim);
-                        imageData.lastFrameCaptured = true;
-                        //start new activity to display output
-                        Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
-                        String message = String.valueOf(data[0])+" "+String.valueOf(data[1])+" "+String.valueOf(data[2])+" "+String.valueOf(data[3]);
-                        intent.putExtra(EXTRA_MESSAGE,message);
-                        startActivity(intent);
-                        //New Thread to handle saving
-                        ThreadSaveData threadSaveData = new ThreadSaveData();
-                        threadSaveData.start();
+                        if (imageData.dataStream.size()==20) {  //my condition to stop
+                            Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                            Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
+                                }
+                            });
+                            recordingData = false;  //stop recording in image reader
+                            imageData.dataY.add(data1Dim);  //add data to be saved
+                            imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
+                            //start new activity to display output
+                            Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
+                            //get all data to the message string
+                            String message = "";
+                            for(int i=0; i<imageData.dataStream.size();i++) {
+                                message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                            }
+                            intent.putExtra(EXTRA_MESSAGE,message);
+                            startActivity(intent);
+                            //New Thread to handle saving
+                            ThreadSaveData threadSaveData = new ThreadSaveData();
+                            threadSaveData.start();
+                            break;  //break from loop as enough bytes captured
+                        }
                     }
                 } else {
                     Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
