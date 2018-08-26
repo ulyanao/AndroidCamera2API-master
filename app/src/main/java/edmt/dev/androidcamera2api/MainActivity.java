@@ -478,13 +478,13 @@ public class MainActivity extends AppCompatActivity {
             short[] data1Dim = new short[imageHeight];
             short counterLines = 0;
             int sumOfLine = 0;
-            byte step = 1;
+            byte step = 8;
             short counterPixelWidth = (short) -step;
             for(int i=0;i<imageHeight * imageWidth;i=i+step) {
                 counterPixelWidth=(short) (counterPixelWidth+step);
                 sumOfLine += (data[i] & 0xff);
                 if((counterPixelWidth+step)>=imageWidth) {
-                    data1Dim[counterLines] = (short) (sumOfLine/imageWidth);
+                    data1Dim[counterLines] = (short) (sumOfLine/imageWidth*step);
                     counterLines++;
                     sumOfLine = 0;
                     counterPixelWidth= (short) -step;
@@ -493,10 +493,10 @@ public class MainActivity extends AppCompatActivity {
             //Log.d("DataTest","Time: "+(endTime-startTime)/100000);
 
             //Final byte array
-            byte dataEncoded = 0;         //The encoded data in 6bit
+            byte data6Bit = 0;         //The encoded data in 6bit
             byte dataBuffer;
             byte part = 0;   //checks if already first 6bit captured of the 12
-            data = new byte[12];         //the byte array where to save the data bytes
+            byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data
             byte counterBytes = 0;      //counts the bytes
             byte counterBits = 0;       //counter of captured bits
             boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
@@ -508,10 +508,10 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i<imageHeight; i++) {
                 if(error) {
                     error = false;  //reset error flag
-                    dataEncoded = 0;    //the current buffered data is reset
-                    data[counterBytes] = 0; //the already saved data at this position is reset
+                    data6Bit = 0;    //the current buffered data is reset
+                    data4Bit[counterBytes] = 0; //the already saved data at this position is reset
                     if(part!=0) {   //if first part of data has already been saved so not part 0 anymore
-                        data[counterBytes-1] = 0;   //than reset las data
+                        data4Bit[counterBytes-1] = 0;   //than reset las data
                         counterBytes--; //and change counter again
                     }
                     part = 0;   //set part to zero again
@@ -541,7 +541,7 @@ public class MainActivity extends AppCompatActivity {
                                     //0,2
                                     if(lastBit == 2 || lastBit == 0) {
                                         //its a 1
-                                        dataEncoded = (byte) ((1 << (5-counterBits) | dataEncoded));
+                                        data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
                                         counterBits++;
                                         lastBit = 1;
                                     } else {
@@ -557,7 +557,7 @@ public class MainActivity extends AppCompatActivity {
                                         lastBit = 0;
                                     } else {
                                         //its a 1
-                                        dataEncoded = (byte) ((1 << (5-counterBits) | dataEncoded));
+                                        data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
                                         counterBits++;
                                         lastBit = 1;
                                     }
@@ -579,27 +579,27 @@ public class MainActivity extends AppCompatActivity {
                                 }
 
                                 if(counterBits==6 && part==0) {    //first 6 bit to 4bit
-                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
-                                        data[counterBytes] = dataBuffer;
+                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = dataBuffer;
                                         counterBits = 0;    //reset the counter of how many bits
-                                        dataEncoded = 0;    //reset the data buffer
+                                        data6Bit = 0;    //reset the data buffer
                                         part = 1;           //set to new part
                                         counterBytes++; //set counterBytes higher...
                                     } else {
                                         error = true;
                                     }
                                 } else if(counterBits==6 && part == 1) {    //first 6 bit to 4bit
-                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
-                                        data[counterBytes] = (byte) (dataBuffer << 4);
+                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = (byte) (dataBuffer << 4);
                                         counterBits = 0;
-                                        dataEncoded = 0;
+                                        data6Bit = 0;
                                         part = 2;
                                     } else {
                                         error = true;
                                     }
                                 } else if(counterBits == 6) { //last 6 bit to last 4 bit
-                                    if ((dataBuffer = decode4Bit6Bit(dataEncoded)) != -1) {
-                                        data[counterBytes] = (byte) (dataBuffer | data[counterBytes]);
+                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = (byte) (dataBuffer | data4Bit[counterBytes]);
                                         counterBytes++; //to get new bytes of data
                                         part = 0; //to care about the if case in the error handling
                                     }
@@ -626,11 +626,11 @@ public class MainActivity extends AppCompatActivity {
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-                    for(int n=0;data[n]!=0 && data[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
-                        while(imageData.dataStream.size()<data[n]) {
+                    for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                        while(imageData.dataStream.size()<data4Bit[n]) {
                             imageData.dataStream.add((byte) 0);
                         }
-                        imageData.dataStream.set(data[n]-1,data[n+1]);
+                        imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
                         if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
                             Log.d("TimeCheck", "End and time in middle: " + middleTime);
                             Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
