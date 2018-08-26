@@ -476,14 +476,18 @@ public class MainActivity extends AppCompatActivity {
             Log.d("Image","New: "+Thread.currentThread().getName());
             //data to 1 dimension
             short[] data1Dim = new short[imageHeight];
-            short counterLines = -1;
+            short counterLines = 0;
             int sumOfLine = 0;
-            for(int i=0;i<imageHeight * imageWidth;i++) {
+            byte step = 1;
+            short counterPixelWidth = (short) -step;
+            for(int i=0;i<imageHeight * imageWidth;i=i+step) {
+                counterPixelWidth=(short) (counterPixelWidth+step);
                 sumOfLine += (data[i] & 0xff);
-                if((i+1)%imageWidth==0) {
-                    counterLines++;
+                if((counterPixelWidth+step)>=imageWidth) {
                     data1Dim[counterLines] = (short) (sumOfLine/imageWidth);
+                    counterLines++;
                     sumOfLine = 0;
+                    counterPixelWidth= (short) -step;
                 }
             }
             //Log.d("DataTest","Time: "+(endTime-startTime)/100000);
