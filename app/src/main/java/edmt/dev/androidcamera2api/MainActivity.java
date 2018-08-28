@@ -286,8 +286,8 @@ public class MainActivity extends AppCompatActivity {
                 width = yuvSizes[0].getWidth();
                 height = yuvSizes[0].getHeight();
             }
-            //Set up image reader with custom size and format
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,1);
+            //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
+            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,5);
             recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
@@ -304,7 +304,7 @@ public class MainActivity extends AppCompatActivity {
                         byte[] data = new byte[image.getWidth() * image.getHeight()];
                         //Get y plane of image and path buffer to data
                         image.getPlanes()[0].getBuffer().get(data);
-
+                        image.close();
                         try {
                             ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone(), test, image.getHeight(), image.getWidth()));
                         } catch (Exception e) {
@@ -313,8 +313,9 @@ public class MainActivity extends AppCompatActivity {
 
                         endTime = System.nanoTime();
                         middleTime = (middleTime + (endTime - startTime) / 100000) / 2;
+                    }else{
+                        image.close();
                     }
-                    image.close();
                 }
             };
             //</editor-fold>
@@ -334,7 +335,7 @@ public class MainActivity extends AppCompatActivity {
             */
 
             expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
-            senUpper = (Integer) (int) 100;               //64 to 1600 //but higher somehow possible
+            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
