@@ -334,8 +334,8 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
-            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
+            expLower = (Long) (long) (1000000000/10000);    //22000 to 100000000
+            senUpper = (Integer) (int) 3200;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -443,6 +443,25 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
                 }
             });
+
+        }
+        private void saveYData(int[] data, int currentImage) throws IOException{
+            //set up the file path
+            File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"_YData.csv");
+            //Stream of text file
+            FileWriter fileWriter = null;
+            try{
+                fileWriter = new FileWriter(file);
+
+                for(int n=0; n<(height);n++) {
+                    fileWriter.write(Integer.toString(n+1)+", ");
+                    fileWriter.write(Integer.toString(data[n])+"\n");
+                }
+
+            }finally {
+                if(fileWriter != null)
+                    fileWriter.close();
+            }
 
         }
     }
