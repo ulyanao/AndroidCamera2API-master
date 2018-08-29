@@ -298,7 +298,8 @@ public class MainActivity extends AppCompatActivity {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData) {
+                    if (recordingData && a == 0) {
+                        a=1;
                         startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
                         byte[] data = new byte[image.getWidth() * image.getHeight()];
@@ -306,7 +307,7 @@ public class MainActivity extends AppCompatActivity {
                         image.getPlanes()[0].getBuffer().get(data);
                         image.close();
                         try {
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone(), test, image.getHeight(), image.getWidth()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -396,6 +397,8 @@ public class MainActivity extends AppCompatActivity {
     }
     //</editor-fold>
 
+    private int a =0;
+
     //<editor-fold desc="Threads">
     private class ThreadSaveData extends Thread {
 
@@ -405,23 +408,19 @@ public class MainActivity extends AppCompatActivity {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-
-            Log.d("Image","The saving Thread is started: "+Thread.currentThread().getName());
             synchronized (imageData) {
-                Log.d("Image","The saving Thread accesses the data: "+Thread.currentThread().getName());
                 try {
-
-                    for(int i=0; i<imageData.dataY.size(); i++) {
+                    for(int i = 0; i<imageData.dataTest.size(); i++) {
                         //set up the file path
-                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataY.get(i).length+"_"+i+"_YData.csv");
+                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataTest.get(i).length+"_"+i+"_YData.csv");
                         //Stream of text file
                         FileWriter fileWriter = null;
                         try{
                             fileWriter = new FileWriter(file);
 
-                            for(int n=0; n<(imageData.dataY.get(i).length);n++) {
+                            for(int n = 0; n<(imageData.dataTest.get(i).length); n++) {
                                 fileWriter.write(Integer.toString(n+1)+", ");
-                                fileWriter.write(Integer.toString(imageData.dataY.get(i)[n])+"\n");
+                                fileWriter.write(Integer.toString(imageData.dataTest.get(i)[n])+"\n");
                             }
                         }finally {
                             if(fileWriter != null)
@@ -429,10 +428,9 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                     }
-                    imageData.dataY.clear();
+                    imageData.dataTest.clear();
                     imageData.dataStream.clear();
                     imageData.lastFrameCaptured=false;
-                    Log.d("Image","The saving Thread has ended: "+Thread.currentThread().getName());
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -443,31 +441,11 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
                 }
             });
-
-        }
-        private void saveYData(int[] data, int currentImage) throws IOException{
-            //set up the file path
-            File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+width+"_"+height+"_"+currentImage+"_YData.csv");
-            //Stream of text file
-            FileWriter fileWriter = null;
-            try{
-                fileWriter = new FileWriter(file);
-
-                for(int n=0; n<(height);n++) {
-                    fileWriter.write(Integer.toString(n+1)+", ");
-                    fileWriter.write(Integer.toString(data[n])+"\n");
-                }
-
-            }finally {
-                if(fileWriter != null)
-                    fileWriter.close();
-            }
-
         }
     }
 
     public class ImageData {
-        public List<short[]> dataY = new ArrayList<>();
+        public List<int[]> dataTest = new ArrayList<>();
         public List<Byte> dataStream = new ArrayList<>();
         public boolean lastFrameCaptured;
 
@@ -480,65 +458,169 @@ public class MainActivity extends AppCompatActivity {
     private class RunnableImage implements Runnable {
         //Initialization
         byte[] data;
-        short test;
-        int imageHeight;
-        int imageWidth;
 
-        RunnableImage(byte[] data, short test, int imageHeight, int imageWidth) {
+        RunnableImage(byte[] data) {
             this.data = data;
-            this.test = test;
-            this.imageHeight = imageHeight;
-            this.imageWidth = imageWidth;
         }
 
         @Override
         public void run() {
-            Log.d("Image","New: "+Thread.currentThread().getName());
-            //data to 1 dimension
-            short[] data1Dim = new short[imageHeight];
-            short counterLines = 0;
-            int sumOfLine = 0;
-            byte step = 8;
-            short counterPixelWidth = (short) -step;
-            for(int i=0;i<imageHeight * imageWidth;i=i+step) {
-                counterPixelWidth=(short) (counterPixelWidth+step);
-                sumOfLine += (data[i] & 0xff);
-                if((counterPixelWidth+step)>=imageWidth) {
-                    data1Dim[counterLines] = (short) (sumOfLine/imageWidth*step);
-                    counterLines++;
-                    sumOfLine = 0;
-                    counterPixelWidth= (short) -step;
-                }
-            }
-            //Log.d("DataTest","Time: "+(endTime-startTime)/100000);
+            //Initialization
+            byte[] dataPlanes = this.data;
+            int width = 4032;
+            int height = 3024;
 
-            //Final byte array
+            //<editor-fold desc="ROI">
+            //Variables
+            int upROI = -1;     //data array starts top right corner and first columns than rows, ends left bottom
+            int lowROI = -1;    //0 is first position, 1 is second
+            int rightROI = -1;
+            int leftROI = -1;
+            int rightUpROIBuffer = -1;
+            int borderROIBuffer = -1;
+            int highestInRow = 0;
+            int lowestInRow = 250;
+            int byteToIntBuffer;
+            int counterInterval = 0;
+            boolean firstDistinguished = false;
+            int counterStripes = 0;
+            boolean stripeThisInterval = false;
+            //Constants
+            int STEP_ROI_ROW = 20;
+            int STEP_ROI_PIXEL = 10;
+            int DISTINGUISH_VALUE = 50;     //from 0 to 255
+            int INTERVAL_OF_STRIPES = 50;   //in pixels
+            int COUNT_OF_STRIPES = 10;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
+
+            //<editor-fold desc="ROI Detection">
+            //Loops
+            for(int i=0; i<width; i=i+STEP_ROI_ROW) {
+                //i is offset of Row
+                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) {
+                    // n*width + i is pixel
+                    byteToIntBuffer = (dataPlanes[i+n*width] & 0xff);
+                    if(byteToIntBuffer>highestInRow) {
+                        highestInRow = byteToIntBuffer;
+                    }
+                    if(byteToIntBuffer<lowestInRow) {
+                        lowestInRow = byteToIntBuffer;
+                    }
+                    if(highestInRow-lowestInRow > DISTINGUISH_VALUE) {  //Check if bright an dark stripes can be distinguished
+                        borderROIBuffer = i+n*width;
+                        stripeThisInterval = true;
+                        if (!firstDistinguished) {
+                            rightUpROIBuffer = borderROIBuffer;
+                            firstDistinguished = true;
+                        }
+                    }
+                    //Check the interval
+                    counterInterval++;
+                    if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {   //Check if interval ended
+                        if(stripeThisInterval) {    //Check if stripe this interval
+                            counterStripes++;       //counter++ stripes
+                            stripeThisInterval = false;
+                        }
+                        //Reset interval values if ended
+                        highestInRow = 0;
+                        lowestInRow = 250;
+                        counterInterval = 0;
+                    }
+                }
+                //Stuff before next Row starts
+                if (counterStripes>=COUNT_OF_STRIPES) { //check if enough stripes per row
+                    //Set the left and low ROI Border
+                    lowROI = borderROIBuffer%width;
+                    if(leftROI != -1) {
+                        leftROI = ( leftROI + (borderROIBuffer/width) )/2;
+                    } else {
+                        leftROI = borderROIBuffer/width;
+                    }
+                    //Set right ROI of buffer of right and up
+                    if(rightROI != -1) {
+                        rightROI = ( rightROI + (rightUpROIBuffer/width) )/2;
+                    } else {
+                        rightROI = rightUpROIBuffer/width;
+                    }
+                    if(upROI == -1) {
+                        upROI = rightUpROIBuffer%width;
+                    }
+                }
+                //Reset highest and lowest and reset row
+                highestInRow = 0;
+                lowestInRow = 250;
+                counterInterval = 0;
+                firstDistinguished = false;
+                stripeThisInterval = false;
+                counterStripes = 0;
+            }
+            //</editor-fold>
+            //</editor-fold>
+
+            //Check if ROI found otherwise return
+            if(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1) {
+                return;
+            }
+
+            //New dimensions of array
+            int widthROI = lowROI-upROI;
+            int heightROI = leftROI-rightROI;
+
+            //<editor-fold desc="1 dim array">
+            //1 dim array by calculating mean of column
+            //Variables
+            int[] data1Dim = new int[heightROI];
+            int sumOfLine = 0;
+            int counterLines=0;
+
+            //Constants
+            int STEP_1DIM_ROW = 10;
+
+            for(int i=rightROI; i<leftROI; i++) {
+                for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
+                    sumOfLine += (dataPlanes[i*width+n] & 0xff);
+                }
+                data1Dim[counterLines] = sumOfLine/widthROI*STEP_1DIM_ROW;
+                counterLines++;
+                sumOfLine = 0;
+            }
+            //</editor-fold>
+
+
+            //<editor-fold desc="Decoding algorithm">
+            //Variables
             byte data6Bit = 0;         //The encoded data in 6bit
-            byte dataBuffer;
-            byte part = 0;   //checks if already first 6bit captured of the 12
-            byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data
-            byte counterBytes = 0;      //counts the bytes
-            byte counterBits = 0;       //counter of captured bits
+            byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data; 1 block number 1 byte repeated
+            byte dataByteBuffer;        //buffer
+            int bytePart = 0;           //checks if already first 6bit captured of the 12
+            int counterBytes = 0;      //counts the bytes
+            int counterBits = 0;       //counter of captured bits
             boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
-            short counterHigh=0;    //counts how many highs in a row
-            short endHigh = -1;     //saves end pixel of a high
-            short startHigh;    //saves start pixel of a high
-            byte lastBit = -1; //-1 nothing, 0 zero last, 1 one last, 2 start bit
+            int counterHigh=0;        //counts how many highs in a row
+            int endHigh = -1;         //saves end pixel of a high
+            int startHigh;            //saves start pixel of a high
+            int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
             boolean error = false;
-            for (int i = 0; i<imageHeight; i++) {
+
+            //Constants
+            int LEVEL_ZERO = 70;
+            int START_BIT_MIN = 36;
+            int START_BIT_MAX = 40;
+
+            //<editor-fold desc="Algorithm">
+            for (int i = 0; i<heightROI; i++) {
                 if(error) {
                     error = false;  //reset error flag
                     data6Bit = 0;    //the current buffered data is reset
                     data4Bit[counterBytes] = 0; //the already saved data at this position is reset
-                    if(part!=0) {   //if first part of data has already been saved so not part 0 anymore
+                    if(bytePart!=0) {   //if first part of data has already been saved so not part 0 anymore
                         data4Bit[counterBytes-1] = 0;   //than reset las data
                         counterBytes--; //and change counter again
                     }
-                    part = 0;   //set part to zero again
+                    bytePart = 0;   //set part to zero again
                     counterBits = 0;    //counter of captured bits is reset
                     lastBit = -1;   //the last bit is not available any longer
                 }
-                if(data1Dim[i]>=70) {   //high point recognized
+                if(data1Dim[i]>=LEVEL_ZERO) {   //high point recognized
                     lastHigh = true;
                     counterHigh++;
                 } else if(lastHigh) {   //this low but last was high
@@ -548,9 +630,9 @@ public class MainActivity extends AppCompatActivity {
                     counterHigh--;  //counter adjust two last high pixel
                     if(36<=counterHigh && counterHigh<=40) {    //check if high was startBit without low parts
                         lastBit = 2;
-                        endHigh = (short) (i - 2);
+                        endHigh = i - 2;
                     } else if(13<=counterHigh && counterHigh<=23) { //check if it was a normal high
-                        startHigh = (short) (i - 1 - counterHigh);  //set new start of this normal high
+                        startHigh = i - 1 - counterHigh;  //set new start of this normal high
                         //Only if start bit called
                         if(endHigh!=-1) {   //only do more if it was not the first high
                             if(2 <= startHigh-endHigh && startHigh-endHigh <= 8) {  //check if two start highs
@@ -598,37 +680,37 @@ public class MainActivity extends AppCompatActivity {
                                     error = true;
                                 }
 
-                                if(counterBits==6 && part==0) {    //first 6 bit to 4bit
-                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                        data4Bit[counterBytes] = dataBuffer;
+                                if(counterBits==6 && bytePart==0) {    //first 6 bit to 4bit
+                                    if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = dataByteBuffer;
                                         counterBits = 0;    //reset the counter of how many bits
                                         data6Bit = 0;    //reset the data buffer
-                                        part = 1;           //set to new part
+                                        bytePart = 1;           //set to new part
                                         counterBytes++; //set counterBytes higher...
                                     } else {
                                         error = true;
                                     }
-                                } else if(counterBits==6 && part == 1) {    //first 6 bit to 4bit
-                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                        data4Bit[counterBytes] = (byte) (dataBuffer << 4);
+                                } else if(counterBits==6 && bytePart == 1) {    //first 6 bit to 4bit
+                                    if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = (byte) (dataByteBuffer << 4);
                                         counterBits = 0;
                                         data6Bit = 0;
-                                        part = 2;
+                                        bytePart = 2;
                                     } else {
                                         error = true;
                                     }
                                 } else if(counterBits == 6) { //last 6 bit to last 4 bit
-                                    if ((dataBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                        data4Bit[counterBytes] = (byte) (dataBuffer | data4Bit[counterBytes]);
+                                    if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                        data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
                                         counterBytes++; //to get new bytes of data
-                                        part = 0; //to care about the if case in the error handling
+                                        bytePart = 0; //to care about the if case in the error handling
                                     }
                                     //reset to capture new byte resp. error if = -1
                                     error = true;
                                 }
                             }
                         }
-                        endHigh = (short) (i - 2);  // a normal high and was processed and now set the end
+                        endHigh = i - 2;  // a normal high and was processed and now set the end
                     } else if(counterHigh>=13){
                         //1. error as sequence is interrupted - too many high values
                         Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
@@ -642,9 +724,19 @@ public class MainActivity extends AppCompatActivity {
                 }
                 //if no high has been - nothing happens in loop and go further in data
             }
+            //</editor-fold>
+
+            //</editor-fold>
 
             synchronized (imageData) {
                 if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
+
+
+                    imageData.dataTest.add(data1Dim);  //add data to be saved
+                    ThreadSaveData threadSaveData = new ThreadSaveData();
+                    threadSaveData.start();
+
+
                     Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
                     for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
                         while(imageData.dataStream.size()<data4Bit[n]) {
@@ -653,7 +745,6 @@ public class MainActivity extends AppCompatActivity {
                         imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
                         if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
                             Log.d("TimeCheck", "End and time in middle: " + middleTime);
-                            Log.d("Image","Thread is starting new Thread to save everything: "+Thread.currentThread().getName());
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
@@ -661,7 +752,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             });
                             recordingData = false;  //stop recording in image reader
-                            imageData.dataY.add(data1Dim);  //add data to be saved
+                            imageData.dataTest.add(data1Dim);  //add data to be saved
                             imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
                             //start new activity to display output
                             Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
@@ -673,7 +764,7 @@ public class MainActivity extends AppCompatActivity {
                             intent.putExtra(EXTRA_MESSAGE,message);
                             startActivity(intent);
                             //New Thread to handle saving
-                            ThreadSaveData threadSaveData = new ThreadSaveData();
+                            //ThreadSaveData threadSaveData = new ThreadSaveData();
                             threadSaveData.start();
                             break;  //break from loop as enough bytes captured
                         }
