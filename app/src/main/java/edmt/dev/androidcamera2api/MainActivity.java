@@ -336,7 +336,7 @@ public class MainActivity extends AppCompatActivity {
             */
 
             expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
-            senUpper = (Integer) (int) 3200;               //64 to 1600 //but higher somehow possible
+            senUpper = (Integer) (int) 100;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -469,6 +469,8 @@ public class MainActivity extends AppCompatActivity {
             byte[] dataPlanes = this.data;
             int width = 4032;
             int height = 3024;
+            double resizeWidth = width/4032;
+            double resizeHeight = height/3024;
 
             //<editor-fold desc="ROI">
             //Variables
@@ -486,13 +488,13 @@ public class MainActivity extends AppCompatActivity {
             int counterInterval = 0;
             boolean firstDistinguished = false;
             int counterStripes = 0;
-            boolean stripeThisInterval = false;
+            boolean stripesOccurred = false;
             //Constants
             int STEP_ROI_ROW = 25;
-            int STEP_ROI_PIXEL = 5;
+            int STEP_ROI_PIXEL = 8;         //min low is 8
             int DISTINGUISH_VALUE = 40;     //from 0 to 255
-            int INTERVAL_OF_STRIPES = 50;   //in pixels
-            int COUNT_OF_STRIPES = 15;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
+            int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
+            int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
             //Loops
@@ -501,6 +503,7 @@ public class MainActivity extends AppCompatActivity {
                 for(int n=0;n<height; n=n+STEP_ROI_PIXEL) {
                     // n*width + i is pixel
                     byteToIntBuffer = (dataPlanes[i+n*width] & 0xff);
+                    counterInterval++;
                     if(byteToIntBuffer>highestInRow) {
                         highestInRow = byteToIntBuffer;
                     }
@@ -509,27 +512,31 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if(highestInRow-lowestInRow > DISTINGUISH_VALUE) {  //Check if bright an dark stripes can be distinguished
                         borderROIBuffer = i+n*width;
-                        stripeThisInterval = true;
                         if (!firstDistinguished) {
                             rightUpROIBuffer = borderROIBuffer;
                             firstDistinguished = true;
                         }
+                        counterStripes++;       //counter++ stripes
+                        if(counterStripes>=COUNT_OF_STRIPES) {
+                            stripesOccurred = true;
+                        }
+
+                        //Reset interval values to start new interval
+                        highestInRow = 0;
+                        lowestInRow = 250;
+                        counterInterval = 0;
                     }
                     //Check the interval
-                    counterInterval++;
                     if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {   //Check if interval ended
-                        if(stripeThisInterval) {    //Check if stripe this interval
-                            counterStripes++;       //counter++ stripes
-                            stripeThisInterval = false;
-                        }
                         //Reset interval values if ended
+                        counterStripes = 0;
                         highestInRow = 0;
                         lowestInRow = 250;
                         counterInterval = 0;
                     }
                 }
                 //Stuff before next Row starts
-                if (counterStripes>=COUNT_OF_STRIPES) { //check if enough stripes per row
+                if (stripesOccurred) { //check if enough stripes per row
                     //Set the left and low ROI Border
                     lowROI = borderROIBuffer%width;
                     leftROIList.add(borderROIBuffer/width);         //Add value to left array list
@@ -544,9 +551,10 @@ public class MainActivity extends AppCompatActivity {
                 lowestInRow = 250;
                 counterInterval = 0;
                 firstDistinguished = false;
-                stripeThisInterval = false;
+                stripesOccurred = false;
                 counterStripes = 0;
             }
+            lowROI++;   //To include the last line
             //Set Borders out of list
             if (!rightROIList.isEmpty()) {
                 rightROI=0;
@@ -562,11 +570,11 @@ public class MainActivity extends AppCompatActivity {
                 }
                 leftROI/=leftROIList.size();
             }
-            //Now leftROI and rightROI set
+            //Now leftROI and rightROI are set
             //</editor-fold>
             //</editor-fold>
 
-            //Check if ROI found otherwise return
+            //Check if ROI found otherwise discard frame
             if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1)) {
                 //New dimensions of array
                 int widthROI = lowROI-upROI;
@@ -577,60 +585,73 @@ public class MainActivity extends AppCompatActivity {
                 //Variables
                 int[] data1Dim = new int[heightROI];
                 int sumOfLine = 0;
+                int counterSamples = 0;
                 int counterLines=0;
 
                 //Constants
-                int STEP_1DIM_ROW = 10;
+                int STEP_1DIM_ROW = 25;
 
                 for(int i=rightROI; i<leftROI; i++) {
                     for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
                         sumOfLine += (dataPlanes[i*width+n] & 0xff);
+                        counterSamples++;
                     }
-                    data1Dim[counterLines] = sumOfLine/widthROI*STEP_1DIM_ROW;
+                    data1Dim[counterLines] = sumOfLine/counterSamples;
                     counterLines++;
                     sumOfLine = 0;
+                    counterSamples = 0;
                 }
                 //</editor-fold>
 
-                /*
+
                 //<editor-fold desc="Thresholding">
-                //Thresholding
                 //Constants
-                int THRESH_STEP = 5;
-                int THRESH_INTERVAL = 100;
+                int THRESH_STEP = 8;
+                int THRESH_INTERVAL = 65;
 
                 //Variables
-                int threshSum = 0;
-                int[] threshValues = new int[heightROI/THRESH_INTERVAL];
+                int highestThresh = 0;
+                int lowestThresh = 250;
+                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL);
                 int counterThreshSteps = 0;
-                int counterThreshIntervals = 0;
 
-                for(int i=0; i<heightROI;i+=THRESH_STEP) {
-                    threshSum+=threshSum/(THRESH_INTERVAL/THRESH_STEP);
+                for(int i=0; i<heightROI;i+=THRESH_STEP) {  //<= THRESH_STEP values not considered
+                    if(data1Dim[i]>highestThresh) {
+                        highestThresh = data1Dim[i];
+                    }
+                    if(data1Dim[i]<lowestThresh) {
+                        lowestThresh = data1Dim[i];
+                    }
                     counterThreshSteps++;
                     if(counterThreshSteps>=THRESH_INTERVAL/THRESH_STEP) {
-                        threshValues[counterThreshIntervals] = threshSum;
-                        counterThreshIntervals++;
-                        threshSum = 0;
+                        threshValues.add((highestThresh+lowestThresh)/2);
+                        highestThresh = 0;
+                        lowestThresh = 250;
                         counterThreshSteps = 0;
                     }
                 }
+                //</editor-fold>
 
+                //Beta will be implemented in decoding for faster processing
+                //<editor-fold desc="Downsampling">
                 //Variables
-                counterThreshIntervals = 0;
+                int counterThreshIntervals = 0;
+                int threshValueBuffer;
+                threshValueBuffer = threshValues.get(counterThreshIntervals);
 
                 for(int i=0;i<heightROI;i++) {
-                    if(data1Dim[i]>threshValues[counterThreshIntervals]){
+                    if(data1Dim[i]>threshValueBuffer){
                         data1Dim[i] = 1;
                     } else {
                         data1Dim[i] = 0;
                     }
-                    if(i>=THRESH_INTERVAL && threshValues.length > counterThreshIntervals + 1) {
+                    if(i>=THRESH_INTERVAL && threshValues.size() > counterThreshIntervals + 1) {
                         counterThreshIntervals++;
+                        threshValueBuffer = threshValues.get(counterThreshIntervals);
                     }
                 }
                 //</editor-fold>
-                */
+
 
                 //<editor-fold desc="Decoding algorithm">
                 //Variables
@@ -646,8 +667,6 @@ public class MainActivity extends AppCompatActivity {
                 int startHigh;            //saves start pixel of a high
                 int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
                 boolean error = false;
-                int levelZero = -1;
-                int counterLevel = 0;
 
                 //Constants
                 int LEVEL_ZERO = 70;
@@ -657,16 +676,6 @@ public class MainActivity extends AppCompatActivity {
                 int INTERVAL_RENEW;
 
                 //<editor-fold desc="Algorithm">
-
-                //Pre calculate start value for level zero
-                for(int i=0; i<heightROI && i<50;i++) {
-                    if(levelZero != -1) {
-                        levelZero = (levelZero+data1Dim[i])/2;
-                    } else {
-                        levelZero = data1Dim[i];
-                    }
-                }
-
 
                 for (int i = 0; i<heightROI; i++) {
                     if(error) {
@@ -682,13 +691,7 @@ public class MainActivity extends AppCompatActivity {
                         lastBit = -1;   //the last bit is not available any longer
                     }
 
-                    if(levelZero != -1) {
-                        levelZero = (levelZero+data1Dim[i])/2;
-                    } else {
-                        levelZero = data1Dim[i];
-                    }
-
-                    if(data1Dim[i]>=LEVEL_ZERO) {   //high point recognized
+                    if(data1Dim[i]>=1) {   //high point recognized
                         lastHigh = true;
                         counterHigh++;
                     } else if(lastHigh) {   //this low but last was high
