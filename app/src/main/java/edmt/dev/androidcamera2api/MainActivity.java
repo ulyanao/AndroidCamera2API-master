@@ -335,8 +335,8 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
-            senUpper = (Integer) (int) 100;               //64 to 1600 //but higher somehow possible
+            expLower = (Long) (long) (1000000000/6000);    //22000 to 100000000
+            senUpper = (Integer) (int) 4000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -410,24 +410,85 @@ public class MainActivity extends AppCompatActivity {
             }
             synchronized (imageData) {
                 try {
-                    for(int i = 0; i<imageData.dataTest.size(); i++) {
-                        //set up the file path
-                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataTest.get(i).length+"_"+i+"_YData.csv");
-                        //Stream of text file
-                        FileWriter fileWriter = null;
-                        try{
-                            fileWriter = new FileWriter(file);
 
-                            for(int n = 0; n<(imageData.dataTest.get(i).length); n++) {
-                                fileWriter.write(Integer.toString(n+1)+", ");
-                                fileWriter.write(Integer.toString(imageData.dataTest.get(i)[n])+"\n");
+
+
+                    //set up the file path
+                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataTest.get(0).length+"_"+0+"_YData.csv");
+                    //Stream of text file
+                    FileWriter fileWriter = null;
+                    try{
+                        fileWriter = new FileWriter(file);
+
+                        int[] data1Dim = imageData.dataTest.get(0);
+
+                        int[] zeros = new int[100];
+                        int[] ones = new int[100];
+
+                        boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
+                        int counterHigh=0;        //counts how many highs in a row
+                        int endHigh = -1;         //saves end pixel of a high
+                        int startHigh;            //saves start pixel of a high
+
+
+
+
+                        //<editor-fold desc="Algorithm">
+
+                        for (int i = 0; i<imageData.dataTest.get(0).length; i++) {
+                            if(data1Dim[i]>=1) {   //high point recognized
+                                lastHigh = true;
+                                counterHigh++;
+                            } else if(lastHigh) {   //this low but last was high
+                                lastHigh=false;
+                                counterHigh++;
+                            } else if(counterHigh != 0) {   //two times low after some highs
+                                counterHigh--;  //counter adjust two last high pixel
+
+                                if(5<=counterHigh && counterHigh<=80) {
+                                    if(counterHigh<100) {
+                                        ones[counterHigh]++;
+                                    } else {
+                                        ones[99]++;
+                                    }
+
+                                    startHigh = i - 1 - counterHigh;  //set new start of this normal high
+                                    //Only if start bit called
+                                    if(endHigh!=-1) {   //only do more if it was not the first high
+                                        if(startHigh-endHigh < 100) {
+                                            zeros[startHigh-endHigh]++;
+                                        } else {
+                                            zeros[99]++;
+                                        }
+
+                                    }
+                                    endHigh = i - 2;  // a normal high and was processed and now set the end
+
+                                }
+
+                                counterHigh = 0;
                             }
-                        }finally {
-                            if(fileWriter != null)
-                                fileWriter.close();
+                            //if no high has been - nothing happens in loop and go further in data
                         }
 
+
+                        for(int i = 0; i<ones.length;i++) {
+                            fileWriter.write(Integer.toString(ones[i]) + ",");
+                            fileWriter.write(Integer.toString(zeros[i]) + "\n");
+                        }
+
+
+
+                    }finally {
+                        if(fileWriter != null)
+                            fileWriter.close();
                     }
+
+
+
+
+
+
                     imageData.dataTest.clear();
                     imageData.dataStream.clear();
                     imageData.lastFrameCaptured=false;
@@ -492,7 +553,7 @@ public class MainActivity extends AppCompatActivity {
             //Constants
             int STEP_ROI_ROW = 25;
             int STEP_ROI_PIXEL = 8;         //min low is 8
-            int DISTINGUISH_VALUE = 40;     //from 0 to 255
+            int DISTINGUISH_VALUE = 80;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
             int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
