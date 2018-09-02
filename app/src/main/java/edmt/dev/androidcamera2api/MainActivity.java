@@ -335,7 +335,7 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/6000);    //22000 to 100000000
+            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
             senUpper = (Integer) (int) 4000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
@@ -411,16 +411,38 @@ public class MainActivity extends AppCompatActivity {
             synchronized (imageData) {
                 try {
 
+                    int[] data1Dim = imageData.dataTest.get(0);
+
 
 
                     //set up the file path
-                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataTest.get(0).length+"_"+0+"_YData.csv");
+                    File file01 = new File(Environment.getExternalStorageDirectory()+"/yuv/Data1Dim_"+imageData.dataTest.get(0).length+".csv");
+                    //Stream of text file
+                    FileWriter fileWriter01 = null;
+                    try{
+                        fileWriter01 = new FileWriter(file01);
+
+                        for(int i=0; i<data1Dim.length;i++) {
+                            fileWriter01.write(Integer.toString(data1Dim[i]) + "\n");
+                        }
+
+
+
+                    }finally {
+                        if(fileWriter01 != null)
+                            fileWriter01.close();
+                    }
+
+
+
+
+
+                    //set up the file path
+                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/distribution_"+imageData.dataTest.get(0).length+".csv");
                     //Stream of text file
                     FileWriter fileWriter = null;
                     try{
                         fileWriter = new FileWriter(file);
-
-                        int[] data1Dim = imageData.dataTest.get(0);
 
                         int[] zeros = new int[100];
                         int[] ones = new int[100];
