@@ -807,7 +807,7 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                     sequenceFinished=false;
                                 } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                    if(8 <= startHigh-endHigh && startHigh-endHigh <= 28){  //check if 0.2 in between to highs
+                                    if(6 <= startHigh-endHigh && startHigh-endHigh <= 30){  //check if 0.2 in between to highs
                                         //0,2
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 1
@@ -819,7 +819,7 @@ public class MainActivity extends AppCompatActivity {
                                             error = true;
                                             Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                         }
-                                    } else if(30 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
+                                    } else if(31 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
                                         //0,4
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 0
@@ -831,7 +831,7 @@ public class MainActivity extends AppCompatActivity {
                                             counterBits++;
                                             lastBit = 1;
                                         }
-                                    } else if(47 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
+                                    } else if(46 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
                                         //0,6
                                         if(lastBit == 1) {
                                             //its a 0
