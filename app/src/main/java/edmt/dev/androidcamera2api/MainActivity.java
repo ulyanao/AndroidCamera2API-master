@@ -333,7 +333,7 @@ public class MainActivity extends AppCompatActivity {
             */
 
             expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
-            senUpper = (Integer) (int) 3000;               //64 to 1600 //but higher somehow possible
+            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -548,21 +548,20 @@ public class MainActivity extends AppCompatActivity {
             int leftROI = -1;
             int rightUpROIBuffer = -1;
             int borderROIBuffer = -1;
-            ArrayList<Integer> rightROIList = new ArrayList<>();
-            ArrayList<Integer> leftROIList = new ArrayList<>();
             int highestInRow = 0;
             int lowestInRow = 250;
             int byteToIntBuffer;
             int counterInterval = 0;
             boolean firstDistinguished = false;
             int counterStripes = 0;
-            int mostStripes = -1;
+            int counterStripesHighest = 0;
+            int mostStripes = 0;
             //Constants
             int STEP_ROI_ROW = 25;
             int STEP_ROI_PIXEL = 8;         //min low is 8
-            int DISTINGUISH_VALUE = 80;     //from 0 to 255
+            int DISTINGUISH_VALUE = 50;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
-            int RANGE_ARROUND_MOST_STRIPES = 20;
+            int RANGE_AROUND_MOST_STRIPES = 20;
             int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
@@ -594,6 +593,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                     //Check the interval
                     if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {   //Check if interval ended
+                        if(counterStripesHighest<counterStripes) {
+                            counterStripesHighest=counterStripes;
+                        }
                         //Reset interval values if ended
                         counterStripes = 0;
                         highestInRow = 0;
@@ -602,8 +604,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 //Stuff before next Row starts
-                if (mostStripes<counterStripes) { //check if most stripes in this line
-                    mostStripes=counterStripes;
+                if (mostStripes<counterStripesHighest) { //check if most stripes in this line
+                    mostStripes=counterStripesHighest;
                     //Set the left and low ROI Border
                     lowROI = borderROIBuffer%width;
                     leftROI = borderROIBuffer/width;       //Add value to left array list
@@ -618,8 +620,8 @@ public class MainActivity extends AppCompatActivity {
                 counterStripes = 0;
             }
             //Set Borders out of list
-            lowROI+=RANGE_ARROUND_MOST_STRIPES/2;
-            upROI = lowROI-RANGE_ARROUND_MOST_STRIPES;
+            lowROI+=RANGE_AROUND_MOST_STRIPES/2;
+            upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
 
             //Now leftROI and rightROI are set
             //</editor-fold>
