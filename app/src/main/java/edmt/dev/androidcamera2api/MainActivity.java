@@ -335,8 +335,8 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
-            senUpper = (Integer) (int) 4000;               //64 to 1600 //but higher somehow possible
+            expLower = (Long) (long) (1000000000/12000);    //22000 to 100000000
+            senUpper = (Integer) (int) 3000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -411,7 +411,8 @@ public class MainActivity extends AppCompatActivity {
             synchronized (imageData) {
                 try {
 
-                    int[] data1Dim = imageData.dataTest.get(0);
+                    int[] data1DimTest = imageData.dataTest.get(0);
+                    int[] data1Dim = imageData.dataTest.get(1);
 
 
 
@@ -423,6 +424,7 @@ public class MainActivity extends AppCompatActivity {
                         fileWriter01 = new FileWriter(file01);
 
                         for(int i=0; i<data1Dim.length;i++) {
+                            fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
                             fileWriter01.write(Integer.toString(data1Dim[i]) + "\n");
                         }
 
@@ -666,26 +668,27 @@ public class MainActivity extends AppCompatActivity {
                 //<editor-fold desc="1 dim array">
                 //1 dim array by calculating mean of column
                 //Variables
-                int[] data1Dim = new int[heightROI];
+                int[] data1DimTest = new int[heightROI];
                 int sumOfLine = 0;
                 int counterSamples = 0;
                 int counterLines=0;
 
                 //Constants
-                int STEP_1DIM_ROW = 25;
+                int STEP_1DIM_ROW = 1;
 
                 for(int i=rightROI; i<leftROI; i++) {
                     for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
                         sumOfLine += (dataPlanes[i*width+n] & 0xff);
                         counterSamples++;
                     }
-                    data1Dim[counterLines] = sumOfLine/counterSamples;
+                    data1DimTest[counterLines] = sumOfLine/counterSamples;
                     counterLines++;
                     sumOfLine = 0;
                     counterSamples = 0;
                 }
                 //</editor-fold>
 
+                int[] data1Dim = data1DimTest.clone();
 
                 //<editor-fold desc="Thresholding">
                 //Constants
@@ -885,6 +888,7 @@ public class MainActivity extends AppCompatActivity {
                 synchronized (imageData) {
                     if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
 
+                        imageData.dataTest.add((data1DimTest));
 
                         imageData.dataTest.add(data1Dim);  //add data to be saved
                         ThreadSaveData threadSaveData = new ThreadSaveData();
