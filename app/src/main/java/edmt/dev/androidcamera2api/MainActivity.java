@@ -57,12 +57,9 @@ public class MainActivity extends AppCompatActivity {
     private CaptureRequest.Builder captureRequestBuilder;
     private Size imageDimension;
     private ImageReader imageReader;
-    private int width;
-    private int height;
 
     //Save to FILE
     private static final int REQUEST_CAMERA_PERMISSION = 200;
-    private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
 
@@ -278,8 +275,8 @@ public class MainActivity extends AppCompatActivity {
                         .getOutputSizes(ImageFormat.YUV_420_888);
 
             //Capture image with custom size
-            width = 640;
-            height = 480;
+            int width = 640;
+            int height = 480;
             //Size is from 0(biggest) to length-1(smallest)
             if(yuvSizes != null && yuvSizes.length > 0)
             {
@@ -287,7 +284,7 @@ public class MainActivity extends AppCompatActivity {
                 height = yuvSizes[0].getHeight();
             }
             //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,5);
+            imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
             recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
@@ -298,8 +295,7 @@ public class MainActivity extends AppCompatActivity {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData && a == 0) {
-                        a=1;
+                    if (recordingData) {
                         startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
                         byte[] data = new byte[image.getWidth() * image.getHeight()];
@@ -335,8 +331,8 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/16000);    //22000 to 100000000
-            senUpper = (Integer) (int) 100;               //64 to 1600 //but higher somehow possible
+            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
+            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
 
@@ -396,8 +392,6 @@ public class MainActivity extends AppCompatActivity {
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
     //</editor-fold>
-
-    private int a =0;
 
     //<editor-fold desc="Threads">
     private class ThreadSaveData extends Thread {
@@ -480,27 +474,27 @@ public class MainActivity extends AppCompatActivity {
             int leftROI = -1;
             int rightUpROIBuffer = -1;
             int borderROIBuffer = -1;
-            ArrayList<Integer> rightROIList = new ArrayList<>();
-            ArrayList<Integer> leftROIList = new ArrayList<>();
             int highestInRow = 0;
             int lowestInRow = 250;
             int byteToIntBuffer;
             int counterInterval = 0;
             boolean firstDistinguished = false;
             int counterStripes = 0;
-            boolean stripesOccurred = false;
+            int counterStripesHighest = 0;
+            int mostStripes = 0;
             //Constants
             int STEP_ROI_ROW = 25;
             int STEP_ROI_PIXEL = 8;         //min low is 8
-            int DISTINGUISH_VALUE = 40;     //from 0 to 255
+            int DISTINGUISH_VALUE = 50;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
+            int RANGE_AROUND_MOST_STRIPES = 20;
             int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
             //Loops
-            for(int i=0; i<width; i=i+STEP_ROI_ROW) {
+            for(int i=0; i<width; i=i+STEP_ROI_ROW) {   //A column
                 //i is offset of Row
-                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) {
+                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) { //A line
                     // n*width + i is pixel
                     byteToIntBuffer = (dataPlanes[i+n*width] & 0xff);
                     counterInterval++;
@@ -517,9 +511,6 @@ public class MainActivity extends AppCompatActivity {
                             firstDistinguished = true;
                         }
                         counterStripes++;       //counter++ stripes
-                        if(counterStripes>=COUNT_OF_STRIPES) {
-                            stripesOccurred = true;
-                        }
 
                         //Reset interval values to start new interval
                         highestInRow = 0;
@@ -528,6 +519,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                     //Check the interval
                     if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {   //Check if interval ended
+                        if(counterStripesHighest<counterStripes) {
+                            counterStripesHighest=counterStripes;
+                        }
                         //Reset interval values if ended
                         counterStripes = 0;
                         highestInRow = 0;
@@ -536,46 +530,31 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 //Stuff before next Row starts
-                if (stripesOccurred) { //check if enough stripes per row
+                if (mostStripes<counterStripesHighest) { //check if most stripes in this line
+                    mostStripes=counterStripesHighest;
                     //Set the left and low ROI Border
                     lowROI = borderROIBuffer%width;
-                    leftROIList.add(borderROIBuffer/width);         //Add value to left array list
+                    leftROI = borderROIBuffer/width;       //Add value to left array list
                     //Set right ROI of buffer of right and up
-                    rightROIList.add(rightUpROIBuffer/width);       //Add value to right buffer
-                    if(upROI == -1) {   //Do only ones at first up
-                        upROI = rightUpROIBuffer%width;
-                    }
+                    rightROI = rightUpROIBuffer/width;       //Add value to right buffer
                 }
                 //Reset highest and lowest and reset row
                 highestInRow = 0;
                 lowestInRow = 250;
                 counterInterval = 0;
                 firstDistinguished = false;
-                stripesOccurred = false;
                 counterStripes = 0;
             }
-            lowROI++;   //To include the last line
             //Set Borders out of list
-            if (!rightROIList.isEmpty()) {
-                rightROI=0;
-                for (int sumOfLine : rightROIList) {
-                    rightROI+=sumOfLine;
-                }
-                rightROI/=rightROIList.size();
-            }
-            if (!leftROIList.isEmpty()) {
-                leftROI=0;
-                for (int sumOfLine : leftROIList) {
-                    leftROI+=sumOfLine;
-                }
-                leftROI/=leftROIList.size();
-            }
+            lowROI+=RANGE_AROUND_MOST_STRIPES/2;
+            upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
+
             //Now leftROI and rightROI are set
             //</editor-fold>
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
-            if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1)) {
+            if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1) && mostStripes>=COUNT_OF_STRIPES) {
                 //New dimensions of array
                 int widthROI = lowROI-upROI;
                 int heightROI = leftROI-rightROI;
@@ -589,7 +568,7 @@ public class MainActivity extends AppCompatActivity {
                 int counterLines=0;
 
                 //Constants
-                int STEP_1DIM_ROW = 25;
+                int STEP_1DIM_ROW = 1;
 
                 for(int i=rightROI; i<leftROI; i++) {
                     for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
@@ -606,25 +585,55 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 8;
-                int THRESH_INTERVAL = 65;
+                int THRESH_STEP = 5;    //not too big to recognize small peeks
+                int THRESH_INTERVAL_MAX = 120;
+                int DISTINGUISH_VALUE_THRESH = 60;
 
                 //Variables
                 int highestThresh = 0;
                 int lowestThresh = 250;
-                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL);
+                int lowestThreshPosition = 0;
+                int lowestThreshOld = -1;
+                int currentData;
+                boolean goesUp = true;
+                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL_MAX);
                 int counterThreshSteps = 0;
 
                 for(int i=0; i<heightROI;i+=THRESH_STEP) {  //<= THRESH_STEP values not considered
-                    if(data1Dim[i]>highestThresh) {
-                        highestThresh = data1Dim[i];
-                    }
-                    if(data1Dim[i]<lowestThresh) {
-                        lowestThresh = data1Dim[i];
-                    }
+                    currentData = data1Dim[i];
                     counterThreshSteps++;
-                    if(counterThreshSteps>=THRESH_INTERVAL/THRESH_STEP) {
-                        threshValues.add((highestThresh+lowestThresh)/2);
+                    if(goesUp) {
+                        if(currentData<lowestThresh) {
+                            lowestThresh=currentData;
+                            lowestThreshPosition = i;
+                        }
+                        if(currentData>lowestThresh+DISTINGUISH_VALUE_THRESH) {
+                            if(lowestThreshOld!=-1) {
+                                //now do everything to save the high
+                                if(lowestThresh>lowestThreshOld) {
+                                    threshValues.add((lowestThresh+highestThresh)/2);
+                                }else {
+                                    threshValues.add((lowestThreshOld+highestThresh)/2);
+                                }
+                                threshValues.add(lowestThreshPosition);
+
+                            }
+                            counterThreshSteps = 0;
+                            goesUp = false;
+                            lowestThreshOld = lowestThresh;
+                            lowestThresh=250;
+                            highestThresh=0;
+                        }
+                    } else {
+                        if(currentData>highestThresh) {
+                            highestThresh = currentData;
+                        }
+                        if(currentData<highestThresh-DISTINGUISH_VALUE) {
+                            goesUp = true;
+                        }
+                    }
+                    if(counterThreshSteps>=THRESH_INTERVAL_MAX/THRESH_STEP) {
+                        goesUp=true;
                         highestThresh = 0;
                         lowestThresh = 250;
                         counterThreshSteps = 0;
@@ -637,7 +646,9 @@ public class MainActivity extends AppCompatActivity {
                 //Variables
                 int counterThreshIntervals = 0;
                 int threshValueBuffer;
-                threshValueBuffer = threshValues.get(counterThreshIntervals);
+                int threshIntervalPosition;
+                threshValueBuffer = 255;
+                threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
 
                 for(int i=0;i<heightROI;i++) {
                     if(data1Dim[i]>threshValueBuffer){
@@ -645,9 +656,10 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         data1Dim[i] = 0;
                     }
-                    if(i>=THRESH_INTERVAL && threshValues.size() > counterThreshIntervals + 1) {
-                        counterThreshIntervals++;
+                    if(i>=threshIntervalPosition && threshValues.size() > counterThreshIntervals + 2) {
+                        counterThreshIntervals+=2;
                         threshValueBuffer = threshValues.get(counterThreshIntervals);
+                        threshIntervalPosition = threshValues.get(counterThreshIntervals+1);
                     }
                 }
                 //</editor-fold>
@@ -667,13 +679,8 @@ public class MainActivity extends AppCompatActivity {
                 int startHigh;            //saves start pixel of a high
                 int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
                 boolean error = false;
-
-                //Constants
-                int LEVEL_ZERO = 70;
-                int START_BIT_MIN = 36;
-                int START_BIT_MAX = 40;
-                int INTERVAL_LEVEL;
-                int INTERVAL_RENEW;
+                boolean startError = false;
+                boolean sequenceFinished = true;
 
                 //<editor-fold desc="Algorithm">
 
@@ -689,6 +696,11 @@ public class MainActivity extends AppCompatActivity {
                         bytePart = 0;   //set part to zero again
                         counterBits = 0;    //counter of captured bits is reset
                         lastBit = -1;   //the last bit is not available any longer
+                        if(startError) {
+                            lastBit=2;  //if start high too early, process with this further
+                            startError = false;
+                        }
+
                     }
 
                     if(data1Dim[i]>=1) {   //high point recognized
@@ -699,18 +711,28 @@ public class MainActivity extends AppCompatActivity {
                         counterHigh++;
                     } else if(counterHigh != 0) {   //two times low after some highs
                         counterHigh--;  //counter adjust two last high pixel
-                        if(36<=counterHigh && counterHigh<=40) {    //check if high was startBit without low parts
+                        if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
                             lastBit = 2;
                             endHigh = i - 2;
-                        } else if(13<=counterHigh && counterHigh<=23) { //check if it was a normal high
+                            if(!sequenceFinished) {
+                                error = true;
+                                startError = true;
+                            }
+                            sequenceFinished=false;
+                        } else if(5<=counterHigh && counterHigh<=27) { //check if it was a normal high
                             startHigh = i - 1 - counterHigh;  //set new start of this normal high
                             //Only if start bit called
                             if(endHigh!=-1) {   //only do more if it was not the first high
-                                if(2 <= startHigh-endHigh && startHigh-endHigh <= 8) {  //check if two start highs
+                                if(1 <= startHigh-endHigh && startHigh-endHigh <= 1) {  //check if two start highs
                                     //start bit
                                     lastBit = 2;
+                                    if(!sequenceFinished) {
+                                        error = true;
+                                        startError = true;
+                                    }
+                                    sequenceFinished=false;
                                 } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                    if(10 <= startHigh-endHigh && startHigh-endHigh <= 20){  //check if 0.2 in between to highs
+                                    if(6 <= startHigh-endHigh && startHigh-endHigh <= 30){  //check if 0.2 in between to highs
                                         //0,2
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 1
@@ -722,7 +744,7 @@ public class MainActivity extends AppCompatActivity {
                                             error = true;
                                             Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                         }
-                                    } else if(29 <= startHigh-endHigh && startHigh-endHigh <= 40){  //check if 0.4 in between to highs
+                                    } else if(31 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
                                         //0,4
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 0
@@ -734,7 +756,7 @@ public class MainActivity extends AppCompatActivity {
                                             counterBits++;
                                             lastBit = 1;
                                         }
-                                    } else if(44 <= startHigh-endHigh && startHigh-endHigh <= 60){  //check if 0.6 in between to highs
+                                    } else if(46 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
                                         //0,6
                                         if(lastBit == 1) {
                                             //its a 0
@@ -775,6 +797,7 @@ public class MainActivity extends AppCompatActivity {
                                             data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
                                             counterBytes++; //to get new bytes of data
                                             bytePart = 0; //to care about the if case in the error handling
+                                            sequenceFinished = true;
                                         }
                                         //reset to capture new byte resp. error if = -1
                                         error = true;
@@ -802,10 +825,6 @@ public class MainActivity extends AppCompatActivity {
                 synchronized (imageData) {
                     if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
 
-
-                        imageData.dataTest.add(data1Dim);  //add data to be saved
-                        ThreadSaveData threadSaveData = new ThreadSaveData();
-                        threadSaveData.start();
 
 
                         Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
@@ -835,7 +854,7 @@ public class MainActivity extends AppCompatActivity {
                                 intent.putExtra(EXTRA_MESSAGE,message);
                                 startActivity(intent);
                                 //New Thread to handle saving
-                                //ThreadSaveData threadSaveData = new ThreadSaveData();
+                                ThreadSaveData threadSaveData = new ThreadSaveData();
                                 threadSaveData.start();
                                 break;  //break from loop as enough bytes captured
                             }
