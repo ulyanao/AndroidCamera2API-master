@@ -660,25 +660,55 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 8;
-                int THRESH_INTERVAL = 65;
+                int THRESH_STEP = 5;    //not too big to recognize small peeks
+                int THRESH_INTERVAL_MAX = 120;
+                int DISTINGUISH_VALUE_THRESH = 60;
 
                 //Variables
                 int highestThresh = 0;
                 int lowestThresh = 250;
-                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL);
+                int lowestThreshPosition = 0;
+                int lowestThreshOld = -1;
+                int currentData;
+                boolean goesUp = true;
+                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL_MAX);
                 int counterThreshSteps = 0;
 
                 for(int i=0; i<heightROI;i+=THRESH_STEP) {  //<= THRESH_STEP values not considered
-                    if(data1Dim[i]>highestThresh) {
-                        highestThresh = data1Dim[i];
-                    }
-                    if(data1Dim[i]<lowestThresh) {
-                        lowestThresh = data1Dim[i];
-                    }
+                    currentData = data1Dim[i];
                     counterThreshSteps++;
-                    if(counterThreshSteps>=THRESH_INTERVAL/THRESH_STEP) {
-                        threshValues.add((highestThresh+lowestThresh)/2);
+                    if(goesUp) {
+                        if(currentData<lowestThresh) {
+                            lowestThresh=currentData;
+                            lowestThreshPosition = i;
+                        }
+                        if(currentData>lowestThresh+DISTINGUISH_VALUE_THRESH) {
+                            if(lowestThreshOld!=-1) {
+                                //now do everything to save the high
+                                if(lowestThresh>lowestThreshOld) {
+                                    threshValues.add((lowestThresh+highestThresh)/2);
+                                }else {
+                                    threshValues.add((lowestThreshOld+highestThresh)/2);
+                                }
+                                threshValues.add(lowestThreshPosition);
+
+                            }
+                            counterThreshSteps = 0;
+                            goesUp = false;
+                            lowestThreshOld = lowestThresh;
+                            lowestThresh=250;
+                            highestThresh=0;
+                        }
+                    } else {
+                        if(currentData>highestThresh) {
+                            highestThresh = currentData;
+                        }
+                        if(currentData<highestThresh-DISTINGUISH_VALUE) {
+                            goesUp = true;
+                        }
+                    }
+                    if(counterThreshSteps>=THRESH_INTERVAL_MAX/THRESH_STEP) {
+                        goesUp=true;
                         highestThresh = 0;
                         lowestThresh = 250;
                         counterThreshSteps = 0;
@@ -691,7 +721,9 @@ public class MainActivity extends AppCompatActivity {
                 //Variables
                 int counterThreshIntervals = 0;
                 int threshValueBuffer;
-                threshValueBuffer = threshValues.get(counterThreshIntervals);
+                int threshIntervalPosition;
+                threshValueBuffer = 255;
+                threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
 
                 for(int i=0;i<heightROI;i++) {
                     if(data1Dim[i]>threshValueBuffer){
@@ -699,9 +731,10 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         data1Dim[i] = 0;
                     }
-                    if(i>=THRESH_INTERVAL && threshValues.size() > counterThreshIntervals + 1) {
-                        counterThreshIntervals++;
+                    if(i>=threshIntervalPosition && threshValues.size() > counterThreshIntervals + 2) {
+                        counterThreshIntervals+=2;
                         threshValueBuffer = threshValues.get(counterThreshIntervals);
+                        threshIntervalPosition = threshValues.get(counterThreshIntervals+1);
                     }
                 }
                 //</editor-fold>
@@ -721,13 +754,8 @@ public class MainActivity extends AppCompatActivity {
                 int startHigh;            //saves start pixel of a high
                 int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
                 boolean error = false;
-
-                //Constants
-                int LEVEL_ZERO = 70;
-                int START_BIT_MIN = 36;
-                int START_BIT_MAX = 40;
-                int INTERVAL_LEVEL;
-                int INTERVAL_RENEW;
+                boolean startError = false;
+                boolean sequenceFinished = true;
 
                 //<editor-fold desc="Algorithm">
 
@@ -743,6 +771,11 @@ public class MainActivity extends AppCompatActivity {
                         bytePart = 0;   //set part to zero again
                         counterBits = 0;    //counter of captured bits is reset
                         lastBit = -1;   //the last bit is not available any longer
+                        if(startError) {
+                            lastBit=2;  //if start high too early, process with this further
+                            startError = false;
+                        }
+
                     }
 
                     if(data1Dim[i]>=1) {   //high point recognized
@@ -753,18 +786,28 @@ public class MainActivity extends AppCompatActivity {
                         counterHigh++;
                     } else if(counterHigh != 0) {   //two times low after some highs
                         counterHigh--;  //counter adjust two last high pixel
-                        if(36<=counterHigh && counterHigh<=40) {    //check if high was startBit without low parts
+                        if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
                             lastBit = 2;
                             endHigh = i - 2;
-                        } else if(13<=counterHigh && counterHigh<=23) { //check if it was a normal high
+                            if(!sequenceFinished) {
+                                error = true;
+                                startError = true;
+                            }
+                            sequenceFinished=false;
+                        } else if(5<=counterHigh && counterHigh<=27) { //check if it was a normal high
                             startHigh = i - 1 - counterHigh;  //set new start of this normal high
                             //Only if start bit called
                             if(endHigh!=-1) {   //only do more if it was not the first high
-                                if(2 <= startHigh-endHigh && startHigh-endHigh <= 8) {  //check if two start highs
+                                if(1 <= startHigh-endHigh && startHigh-endHigh <= 1) {  //check if two start highs
                                     //start bit
                                     lastBit = 2;
+                                    if(!sequenceFinished) {
+                                        error = true;
+                                        startError = true;
+                                    }
+                                    sequenceFinished=false;
                                 } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                    if(10 <= startHigh-endHigh && startHigh-endHigh <= 20){  //check if 0.2 in between to highs
+                                    if(8 <= startHigh-endHigh && startHigh-endHigh <= 28){  //check if 0.2 in between to highs
                                         //0,2
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 1
@@ -776,7 +819,7 @@ public class MainActivity extends AppCompatActivity {
                                             error = true;
                                             Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                         }
-                                    } else if(29 <= startHigh-endHigh && startHigh-endHigh <= 40){  //check if 0.4 in between to highs
+                                    } else if(30 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
                                         //0,4
                                         if(lastBit == 2 || lastBit == 0) {
                                             //its a 0
@@ -788,7 +831,7 @@ public class MainActivity extends AppCompatActivity {
                                             counterBits++;
                                             lastBit = 1;
                                         }
-                                    } else if(44 <= startHigh-endHigh && startHigh-endHigh <= 60){  //check if 0.6 in between to highs
+                                    } else if(47 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
                                         //0,6
                                         if(lastBit == 1) {
                                             //its a 0
@@ -829,6 +872,7 @@ public class MainActivity extends AppCompatActivity {
                                             data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
                                             counterBytes++; //to get new bytes of data
                                             bytePart = 0; //to care about the if case in the error handling
+                                            sequenceFinished = true;
                                         }
                                         //reset to capture new byte resp. error if = -1
                                         error = true;
