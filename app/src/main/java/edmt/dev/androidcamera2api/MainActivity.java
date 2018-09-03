@@ -415,36 +415,14 @@ public class MainActivity extends AppCompatActivity {
                     int[] data1Dim = imageData.dataTest.get(1);
 
 
-
                     //set up the file path
-                    File file01 = new File(Environment.getExternalStorageDirectory()+"/yuv/Data1Dim_"+imageData.dataTest.get(0).length+".csv");
+                    File file01 = new File(Environment.getExternalStorageDirectory()+"/yuv/E"+expLower+"_S"+senUpper+"_U"+imageData.dataTest.get(2)[0]+"_D"+imageData.dataTest.get(2)[1]+"_R"+imageData.dataTest.get(2)[2]+"_L"+imageData.dataTest.get(2)[3]+".csv");
                     //Stream of text file
                     FileWriter fileWriter01 = null;
                     try{
                         fileWriter01 = new FileWriter(file01);
 
-                        for(int i=0; i<data1Dim.length;i++) {
-                            fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
-                            fileWriter01.write(Integer.toString(data1Dim[i]) + "\n");
-                        }
 
-
-
-                    }finally {
-                        if(fileWriter01 != null)
-                            fileWriter01.close();
-                    }
-
-
-
-
-
-                    //set up the file path
-                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/distribution_"+imageData.dataTest.get(0).length+".csv");
-                    //Stream of text file
-                    FileWriter fileWriter = null;
-                    try{
-                        fileWriter = new FileWriter(file);
 
                         int[] zeros = new int[100];
                         int[] ones = new int[100];
@@ -496,21 +474,29 @@ public class MainActivity extends AppCompatActivity {
                         }
 
 
-                        for(int i = 0; i<ones.length;i++) {
-                            fileWriter.write(Integer.toString(ones[i]) + ",");
-                            fileWriter.write(Integer.toString(zeros[i]) + "\n");
+
+                        for(int i=0; i<data1Dim.length || i<ones.length;i++) {
+                            if(i<data1Dim.length && i<ones.length) {
+                                fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
+                                fileWriter01.write(Integer.toString(data1Dim[i]) + ",,");
+                                fileWriter01.write(Integer.toString(ones[i]) + ",");
+                                fileWriter01.write(Integer.toString(zeros[i]) + "\n");
+                            } else if(i<data1Dim.length) {
+                                fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
+                                fileWriter01.write(Integer.toString(data1Dim[i]) + "\n");
+                            } else if(i<ones.length) {
+                                fileWriter01.write(",,,"+Integer.toString(ones[i]) + ",");
+                                fileWriter01.write(Integer.toString(zeros[i]) + "\n");
+                            }
+
                         }
 
 
 
                     }finally {
-                        if(fileWriter != null)
-                            fileWriter.close();
+                        if(fileWriter01 != null)
+                            fileWriter01.close();
                     }
-
-
-
-
 
 
                     imageData.dataTest.clear();
@@ -888,9 +874,10 @@ public class MainActivity extends AppCompatActivity {
                 synchronized (imageData) {
                     if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
 
-                        imageData.dataTest.add((data1DimTest));
+                        imageData.dataTest.add((data1DimTest)); //the raw data
+                        imageData.dataTest.add(data1Dim);  //add data 1/0
+                        imageData.dataTest.add(new int[]{upROI,lowROI,rightROI,leftROI});   //add ROI borders
 
-                        imageData.dataTest.add(data1Dim);  //add data to be saved
                         ThreadSaveData threadSaveData = new ThreadSaveData();
                         threadSaveData.start();
 
