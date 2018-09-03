@@ -57,12 +57,9 @@ public class MainActivity extends AppCompatActivity {
     private CaptureRequest.Builder captureRequestBuilder;
     private Size imageDimension;
     private ImageReader imageReader;
-    private int width;
-    private int height;
 
     //Save to FILE
     private static final int REQUEST_CAMERA_PERMISSION = 200;
-    private boolean mFlashSupported;
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
 
@@ -278,8 +275,8 @@ public class MainActivity extends AppCompatActivity {
                         .getOutputSizes(ImageFormat.YUV_420_888);
 
             //Capture image with custom size
-            width = 640;
-            height = 480;
+            int width = 640;
+            int height = 480;
             //Size is from 0(biggest) to length-1(smallest)
             if(yuvSizes != null && yuvSizes.length > 0)
             {
@@ -287,7 +284,7 @@ public class MainActivity extends AppCompatActivity {
                 height = yuvSizes[0].getHeight();
             }
             //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
-            imageReader = ImageReader.newInstance(width,height,ImageFormat.YUV_420_888,5);
+            imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
             recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
@@ -335,7 +332,7 @@ public class MainActivity extends AppCompatActivity {
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/12000);    //22000 to 100000000
+            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
             senUpper = (Integer) (int) 3000;               //64 to 1600 //but higher somehow possible
             fraUpper = (Long) (long) 1000000000/30;
 
@@ -559,19 +556,20 @@ public class MainActivity extends AppCompatActivity {
             int counterInterval = 0;
             boolean firstDistinguished = false;
             int counterStripes = 0;
-            boolean stripesOccurred = false;
+            int mostStripes = -1;
             //Constants
             int STEP_ROI_ROW = 25;
             int STEP_ROI_PIXEL = 8;         //min low is 8
             int DISTINGUISH_VALUE = 80;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
+            int RANGE_ARROUND_MOST_STRIPES = 20;
             int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
             //Loops
-            for(int i=0; i<width; i=i+STEP_ROI_ROW) {
+            for(int i=0; i<width; i=i+STEP_ROI_ROW) {   //A column
                 //i is offset of Row
-                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) {
+                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) { //A line
                     // n*width + i is pixel
                     byteToIntBuffer = (dataPlanes[i+n*width] & 0xff);
                     counterInterval++;
@@ -588,9 +586,6 @@ public class MainActivity extends AppCompatActivity {
                             firstDistinguished = true;
                         }
                         counterStripes++;       //counter++ stripes
-                        if(counterStripes>=COUNT_OF_STRIPES) {
-                            stripesOccurred = true;
-                        }
 
                         //Reset interval values to start new interval
                         highestInRow = 0;
@@ -607,46 +602,31 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
                 //Stuff before next Row starts
-                if (stripesOccurred) { //check if enough stripes per row
+                if (mostStripes<counterStripes) { //check if most stripes in this line
+                    mostStripes=counterStripes;
                     //Set the left and low ROI Border
                     lowROI = borderROIBuffer%width;
-                    leftROIList.add(borderROIBuffer/width);         //Add value to left array list
+                    leftROI = borderROIBuffer/width;       //Add value to left array list
                     //Set right ROI of buffer of right and up
-                    rightROIList.add(rightUpROIBuffer/width);       //Add value to right buffer
-                    if(upROI == -1) {   //Do only ones at first up
-                        upROI = rightUpROIBuffer%width;
-                    }
+                    rightROI = rightUpROIBuffer/width;       //Add value to right buffer
                 }
                 //Reset highest and lowest and reset row
                 highestInRow = 0;
                 lowestInRow = 250;
                 counterInterval = 0;
                 firstDistinguished = false;
-                stripesOccurred = false;
                 counterStripes = 0;
             }
-            lowROI++;   //To include the last line
             //Set Borders out of list
-            if (!rightROIList.isEmpty()) {
-                rightROI=0;
-                for (int sumOfLine : rightROIList) {
-                    rightROI+=sumOfLine;
-                }
-                rightROI/=rightROIList.size();
-            }
-            if (!leftROIList.isEmpty()) {
-                leftROI=0;
-                for (int sumOfLine : leftROIList) {
-                    leftROI+=sumOfLine;
-                }
-                leftROI/=leftROIList.size();
-            }
+            lowROI+=RANGE_ARROUND_MOST_STRIPES/2;
+            upROI = lowROI-RANGE_ARROUND_MOST_STRIPES;
+
             //Now leftROI and rightROI are set
             //</editor-fold>
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
-            if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1)) {
+            if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1) && mostStripes>=COUNT_OF_STRIPES) {
                 //New dimensions of array
                 int widthROI = lowROI-upROI;
                 int heightROI = leftROI-rightROI;
