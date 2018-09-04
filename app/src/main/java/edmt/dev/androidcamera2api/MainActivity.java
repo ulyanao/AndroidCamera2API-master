@@ -406,14 +406,13 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     for(int i = 0; i<imageData.dataTest.size(); i++) {
                         //set up the file path
-                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/picture_"+imageData.dataTest.get(i).length+"_"+i+"_YData.csv");
+                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/E"+expLower+"_S"+senUpper+"_H"+imageData.dataTest.get(i).length+".csv");
                         //Stream of text file
                         FileWriter fileWriter = null;
                         try{
                             fileWriter = new FileWriter(file);
 
                             for(int n = 0; n<(imageData.dataTest.get(i).length); n++) {
-                                fileWriter.write(Integer.toString(n+1)+", ");
                                 fileWriter.write(Integer.toString(imageData.dataTest.get(i)[n])+"\n");
                             }
                         }finally {
