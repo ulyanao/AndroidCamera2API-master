@@ -818,6 +818,11 @@ public class MainActivity extends AppCompatActivity {
                         }
                         //if no high has been - nothing happens in loop and go further in data
                     }
+                    if(bytePart==2) {           //Check if sequence ended, but block byte and first part of byte are already written
+                        //I have to discard both as not completed
+                        data4Bit[counterBytes] = 0;
+                        data4Bit[counterBytes-1] = 0;
+                    }
                     //</editor-fold>
 
                     //</editor-fold>
