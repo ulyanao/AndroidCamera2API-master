@@ -640,231 +640,231 @@ public class MainActivity extends AppCompatActivity {
                 }
                 //</editor-fold>
 
-                //Beta will be implemented in decoding for faster processing
-                //<editor-fold desc="Downsampling">
-                //Variables
-                int counterThreshIntervals = 0;
-                int threshValueBuffer;
-                int threshIntervalPosition;
-                threshValueBuffer = 255;
-                threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
+                if (threshValues.size()>=COUNT_OF_STRIPES) {
+                    //Beta will be implemented in decoding for faster processing
+                    //<editor-fold desc="Downsampling">
+                    //Variables
+                    int counterThreshIntervals = 0;
+                    int threshValueBuffer;
+                    int threshIntervalPosition;
+                    threshValueBuffer = 255;
+                    threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
 
-                for(int i=0;i<heightROI;i++) {
-                    if(data1Dim[i]>threshValueBuffer){
-                        data1Dim[i] = 1;
-                    } else {
-                        data1Dim[i] = 0;
-                    }
-                    if(i>=threshIntervalPosition && threshValues.size() > counterThreshIntervals + 2) {
-                        counterThreshIntervals+=2;
-                        threshValueBuffer = threshValues.get(counterThreshIntervals);
-                        threshIntervalPosition = threshValues.get(counterThreshIntervals+1);
-                    }
-                }
-                //</editor-fold>
-
-
-                //<editor-fold desc="Decoding algorithm">
-                //Variables
-                byte data6Bit = 0;         //The encoded data in 6bit
-                byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data; 1 block number 1 byte repeated
-                byte dataByteBuffer;        //buffer
-                int bytePart = 0;           //checks if already first 6bit captured of the 12
-                int counterBytes = 0;      //counts the bytes
-                int counterBits = 0;       //counter of captured bits
-                boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
-                int counterHigh=0;        //counts how many highs in a row
-                int endHigh = -1;         //saves end pixel of a high
-                int startHigh;            //saves start pixel of a high
-                int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
-                boolean error = false;
-                boolean startError = false;
-                boolean sequenceFinished = true;
-
-                //<editor-fold desc="Algorithm">
-
-                for (int i = 0; i<heightROI; i++) {
-                    if(error) {
-                        error = false;  //reset error flag
-                        data6Bit = 0;    //the current buffered data is reset
-                        data4Bit[counterBytes] = 0; //the already saved data at this position is reset
-                        if(bytePart!=0) {   //if first part of data has already been saved so not part 0 anymore
-                            data4Bit[counterBytes-1] = 0;   //than reset las data
-                            counterBytes--; //and change counter again
+                    for(int i=0;i<heightROI;i++) {
+                        if(data1Dim[i]>threshValueBuffer){
+                            data1Dim[i] = 1;
+                        } else {
+                            data1Dim[i] = 0;
                         }
-                        bytePart = 0;   //set part to zero again
-                        counterBits = 0;    //counter of captured bits is reset
-                        lastBit = -1;   //the last bit is not available any longer
-                        if(startError) {
-                            lastBit=2;  //if start high too early, process with this further
-                            startError = false;
+                        if(i>=threshIntervalPosition && threshValues.size() > counterThreshIntervals + 2) {
+                            counterThreshIntervals+=2;
+                            threshValueBuffer = threshValues.get(counterThreshIntervals);
+                            threshIntervalPosition = threshValues.get(counterThreshIntervals+1);
+                        }
+                    }
+                    //</editor-fold>
+
+
+                    //<editor-fold desc="Decoding algorithm">
+                    //Variables
+                    byte data6Bit = 0;         //The encoded data in 6bit
+                    byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data; 1 block number 1 byte repeated
+                    byte dataByteBuffer;        //buffer
+                    int bytePart = 0;           //checks if already first 6bit captured of the 12
+                    int counterBytes = 0;      //counts the bytes
+                    int counterBits = 0;       //counter of captured bits
+                    boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
+                    int counterHigh=0;        //counts how many highs in a row
+                    int endHigh = -1;         //saves end pixel of a high
+                    int startHigh;            //saves start pixel of a high
+                    int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
+                    boolean error = false;
+                    boolean startError = false;
+                    boolean sequenceFinished = true;
+
+                    //<editor-fold desc="Algorithm">
+
+                    for (int i = 0; i<heightROI; i++) {
+                        if(error) {
+                            error = false;  //reset error flag
+                            data6Bit = 0;    //the current buffered data is reset
+                            data4Bit[counterBytes] = 0; //the already saved data at this position is reset
+                            if(bytePart!=0) {   //if first part of data has already been saved so not part 0 anymore
+                                data4Bit[counterBytes-1] = 0;   //than reset las data
+                                counterBytes--; //and change counter again
+                            }
+                            bytePart = 0;   //set part to zero again
+                            counterBits = 0;    //counter of captured bits is reset
+                            lastBit = -1;   //the last bit is not available any longer
+                            if(startError) {
+                                lastBit=2;  //if start high too early, process with this further
+                                startError = false;
+                            }
+
                         }
 
-                    }
+                        if(data1Dim[i]>=1) {   //high point recognized
+                            lastHigh = true;
+                            counterHigh++;
+                        } else if(lastHigh) {   //this low but last was high
+                            lastHigh=false;
+                            counterHigh++;
+                        } else if(counterHigh != 0) {   //two times low after some highs
+                            counterHigh--;  //counter adjust two last high pixel
+                            if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
+                                lastBit = 2;
+                                endHigh = i - 2;
+                                if(!sequenceFinished) {
+                                    error = true;
+                                    startError = true;
+                                }
+                                sequenceFinished=false;
+                            } else if(5<=counterHigh && counterHigh<=27) { //check if it was a normal high
+                                startHigh = i - 1 - counterHigh;  //set new start of this normal high
+                                //Only if start bit called
+                                if(endHigh!=-1) {   //only do more if it was not the first high
+                                    if(1 <= startHigh-endHigh && startHigh-endHigh <= 1) {  //check if two start highs
+                                        //start bit
+                                        lastBit = 2;
+                                        if(!sequenceFinished) {
+                                            error = true;
+                                            startError = true;
+                                        }
+                                        sequenceFinished=false;
+                                    } else if (lastBit!=-1) {                               //Check if start bit called ones
+                                        if(6 <= startHigh-endHigh && startHigh-endHigh <= 30){  //check if 0.2 in between to highs
+                                            //0,2
+                                            if(lastBit == 2 || lastBit == 0) {
+                                                //its a 1
+                                                data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
+                                                counterBits++;
+                                                lastBit = 1;
+                                            } else {
+                                                //error not possible to have this bit followed by this lows
+                                                error = true;
+                                                Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
+                                            }
+                                        } else if(31 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
+                                            //0,4
+                                            if(lastBit == 2 || lastBit == 0) {
+                                                //its a 0
+                                                counterBits++;
+                                                lastBit = 0;
+                                            } else {
+                                                //its a 1
+                                                data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
+                                                counterBits++;
+                                                lastBit = 1;
+                                            }
+                                        } else if(46 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
+                                            //0,6
+                                            if(lastBit == 1) {
+                                                //its a 0
+                                                counterBits++;
+                                                lastBit = 0;
+                                            } else {
+                                                //error
+                                                Log.d("DataTest", "Error last Bit at 0.6; and at pixel: "+i);
+                                                error = true;
+                                            }
+                                        } else {    //some else number of lows in between two highs => sequence is interrupted
+                                            // error
+                                            Log.d("DataTest", "Error strange number of lows; and at pixel: "+i);
+                                            error = true;
+                                        }
 
-                    if(data1Dim[i]>=1) {   //high point recognized
-                        lastHigh = true;
-                        counterHigh++;
-                    } else if(lastHigh) {   //this low but last was high
-                        lastHigh=false;
-                        counterHigh++;
-                    } else if(counterHigh != 0) {   //two times low after some highs
-                        counterHigh--;  //counter adjust two last high pixel
-                        if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
-                            lastBit = 2;
-                            endHigh = i - 2;
-                            if(!sequenceFinished) {
+                                        if(counterBits==6 && bytePart==0) {    //first 6 bit to 4bit
+                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                                data4Bit[counterBytes] = dataByteBuffer;
+                                                counterBits = 0;    //reset the counter of how many bits
+                                                data6Bit = 0;    //reset the data buffer
+                                                bytePart = 1;           //set to new part
+                                                counterBytes++; //set counterBytes higher...
+                                            } else {
+                                                error = true;
+                                            }
+                                        } else if(counterBits==6 && bytePart == 1) {    //first 6 bit to 4bit
+                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                                data4Bit[counterBytes] = (byte) (dataByteBuffer << 4);
+                                                counterBits = 0;
+                                                data6Bit = 0;
+                                                bytePart = 2;
+                                            } else {
+                                                error = true;
+                                            }
+                                        } else if(counterBits == 6) { //last 6 bit to last 4 bit
+                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
+                                                data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
+                                                counterBytes++; //to get new bytes of data
+                                                bytePart = 0; //to care about the if case in the error handling
+                                                sequenceFinished = true;
+                                            }
+                                            //reset to capture new byte resp. error if = -1
+                                            error = true;
+                                        }
+                                    }
+                                }
+                                endHigh = i - 2;  // a normal high and was processed and now set the end
+                            } else if(counterHigh>=13){
+                                //1. error as sequence is interrupted - too many high values
+                                Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
                                 error = true;
-                                startError = true;
+                                endHigh = -1;   //not a normal high so set back last high value
                             }
-                            sequenceFinished=false;
-                        } else if(5<=counterHigh && counterHigh<=27) { //check if it was a normal high
-                            startHigh = i - 1 - counterHigh;  //set new start of this normal high
-                            //Only if start bit called
-                            if(endHigh!=-1) {   //only do more if it was not the first high
-                                if(1 <= startHigh-endHigh && startHigh-endHigh <= 1) {  //check if two start highs
-                                    //start bit
-                                    lastBit = 2;
-                                    if(!sequenceFinished) {
-                                        error = true;
-                                        startError = true;
-                                    }
-                                    sequenceFinished=false;
-                                } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                    if(6 <= startHigh-endHigh && startHigh-endHigh <= 30){  //check if 0.2 in between to highs
-                                        //0,2
-                                        if(lastBit == 2 || lastBit == 0) {
-                                            //its a 1
-                                            data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
-                                            counterBits++;
-                                            lastBit = 1;
-                                        } else {
-                                            //error not possible to have this bit followed by this lows
-                                            error = true;
-                                            Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
-                                        }
-                                    } else if(31 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
-                                        //0,4
-                                        if(lastBit == 2 || lastBit == 0) {
-                                            //its a 0
-                                            counterBits++;
-                                            lastBit = 0;
-                                        } else {
-                                            //its a 1
-                                            data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
-                                            counterBits++;
-                                            lastBit = 1;
-                                        }
-                                    } else if(46 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
-                                        //0,6
-                                        if(lastBit == 1) {
-                                            //its a 0
-                                            counterBits++;
-                                            lastBit = 0;
-                                        } else {
-                                            //error
-                                            Log.d("DataTest", "Error last Bit at 0.6; and at pixel: "+i);
-                                            error = true;
-                                        }
-                                    } else {    //some else number of lows in between two highs => sequence is interrupted
-                                        // error
-                                        Log.d("DataTest", "Error strange number of lows; and at pixel: "+i);
-                                        error = true;
-                                    }
+                            //2. just some strange highs (small ones maybe only) in between highs does not matter
 
-                                    if(counterBits==6 && bytePart==0) {    //first 6 bit to 4bit
-                                        if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                            data4Bit[counterBytes] = dataByteBuffer;
-                                            counterBits = 0;    //reset the counter of how many bits
-                                            data6Bit = 0;    //reset the data buffer
-                                            bytePart = 1;           //set to new part
-                                            counterBytes++; //set counterBytes higher...
-                                        } else {
-                                            error = true;
-                                        }
-                                    } else if(counterBits==6 && bytePart == 1) {    //first 6 bit to 4bit
-                                        if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                            data4Bit[counterBytes] = (byte) (dataByteBuffer << 4);
-                                            counterBits = 0;
-                                            data6Bit = 0;
-                                            bytePart = 2;
-                                        } else {
-                                            error = true;
-                                        }
-                                    } else if(counterBits == 6) { //last 6 bit to last 4 bit
-                                        if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                            data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
-                                            counterBytes++; //to get new bytes of data
-                                            bytePart = 0; //to care about the if case in the error handling
-                                            sequenceFinished = true;
-                                        }
-                                        //reset to capture new byte resp. error if = -1
-                                        error = true;
-                                    }
-                                }
-                            }
-                            endHigh = i - 2;  // a normal high and was processed and now set the end
-                        } else if(counterHigh>=13){
-                            //1. error as sequence is interrupted - too many high values
-                            Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
-                            error = true;
-                            endHigh = -1;   //not a normal high so set back last high value
+                            //after end of high processed go to 0 again
+                            counterHigh = 0;
                         }
-                        //2. just some strange highs (small ones maybe only) in between highs does not matter
-
-                        //after end of high processed go to 0 again
-                        counterHigh = 0;
+                        //if no high has been - nothing happens in loop and go further in data
                     }
-                    //if no high has been - nothing happens in loop and go further in data
-                }
-                //</editor-fold>
+                    //</editor-fold>
 
-                //</editor-fold>
+                    //</editor-fold>
 
-                synchronized (imageData) {
-                    if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
+                    synchronized (imageData) {
+                        if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
 
 
 
-                        Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
-                        for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
-                            while(imageData.dataStream.size()<data4Bit[n]) {
-                                imageData.dataStream.add((byte) 0);
-                            }
-                            imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
-                            if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
-                                Log.d("TimeCheck", "End and time in middle: " + middleTime);
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
-                                    }
-                                });
-                                recordingData = false;  //stop recording in image reader
-                                imageData.dataTest.add(data1Dim);  //add data to be saved
-                                imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
-                                //start new activity to display output
-                                Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
-                                //get all data to the message string
-                                String message = "";
-                                for(int i=0; i<imageData.dataStream.size();i++) {
-                                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
+                            for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                                while(imageData.dataStream.size()<data4Bit[n]) {
+                                    imageData.dataStream.add((byte) 0);
                                 }
-                                intent.putExtra(EXTRA_MESSAGE,message);
-                                startActivity(intent);
-                                //New Thread to handle saving
-                                ThreadSaveData threadSaveData = new ThreadSaveData();
-                                threadSaveData.start();
-                                break;  //break from loop as enough bytes captured
+                                imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
+                                if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
+                                    Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                    recordingData = false;  //stop recording in image reader
+                                    imageData.dataTest.add(data1Dim);  //add data to be saved
+                                    imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
+                                    //start new activity to display output
+                                    Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
+                                    //get all data to the message string
+                                    String message = "";
+                                    for(int i=0; i<imageData.dataStream.size();i++) {
+                                        message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                                    }
+                                    intent.putExtra(EXTRA_MESSAGE,message);
+                                    startActivity(intent);
+                                    //New Thread to handle saving
+                                    ThreadSaveData threadSaveData = new ThreadSaveData();
+                                    threadSaveData.start();
+                                    break;  //break from loop as enough bytes captured
+                                }
                             }
+                        } else {
+                            Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                         }
-                    } else {
-                        Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                     }
                 }
             }
-
-
         }
         private byte decode4Bit6Bit(byte dataCoded) {
             byte data = -1;
