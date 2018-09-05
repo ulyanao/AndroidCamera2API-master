@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
@@ -40,6 +41,10 @@ public class MainActivity extends AppCompatActivity {
 
     //<editor-fold desc="Declaration">
     private TextureView textureView;
+    private Button btnCapture;
+
+    private final int BUTTON_COLOR_ON = Color.RED;
+    private final int BUTTON_COLOR_OFF = Color.WHITE;
 
     //Check state orientation of output image
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
@@ -137,18 +142,25 @@ public class MainActivity extends AppCompatActivity {
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
         textureView.setSurfaceTextureListener(textureListener);
-        Button btnCapture = (Button) findViewById(R.id.btnCapture);
+        btnCapture = (Button) findViewById(R.id.btnCapture);
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                btnCapture.setClickable(false);
                 recordingData = !recordingData;
+                synchronized (imageData) {
+                    if (!recordingData) {
+                        imageData.lastFrameCaptured = true;
+                    }
+                }
                 if(recordingData) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(MainActivity.this, "Image recording has stated!", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Image recording has started!", Toast.LENGTH_SHORT).show();
                         }
                     });
+                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON);
                 } else {
                     runOnUiThread(new Runnable() {
                         @Override
@@ -156,7 +168,18 @@ public class MainActivity extends AppCompatActivity {
                             Toast.makeText(MainActivity.this, "Image recording has stopped!", Toast.LENGTH_SHORT).show();
                         }
                     });
+                    btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
+                    while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
+
+                    }
+                    synchronized (imageData) {
+                        imageData.dataTest.clear();
+                        imageData.dataStream.clear();
+                        imageData.lastFrameCaptured=false;
+                        a=0;
+                    }
                 }
+                btnCapture.setClickable(true);
             }
         });
     }
@@ -294,6 +317,7 @@ public class MainActivity extends AppCompatActivity {
                 public void onImageAvailable(ImageReader imageReader) {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
+                    Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
 
                     if (recordingData && a == 0) {
                         a=1;
@@ -400,11 +424,15 @@ public class MainActivity extends AppCompatActivity {
     private class ThreadSaveData extends Thread {
 
         public void run() {
-            try {
-                Thread.currentThread().sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
+
             }
+            //set up new activity to display output
+            Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
+            //get all data to the message string
+            String message = "";
+
+            //Now get all the data out of imageData
             synchronized (imageData) {
                 try {
 
@@ -496,19 +524,34 @@ public class MainActivity extends AppCompatActivity {
                     }
 
 
-                    imageData.dataTest.clear();
-                    imageData.dataStream.clear();
-                    imageData.lastFrameCaptured=false;
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
+
+                //Set up the message for new activity out of imageData
+                for(int i=0; i<imageData.dataStream.size();i++) {
+                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                }
+                intent.putExtra(EXTRA_MESSAGE,message);
+
+                //Reset the data for next recording
+                imageData.dataTest.clear();
+                imageData.dataStream.clear();
+                imageData.lastFrameCaptured=false;
+                a=0;
             }
+
+            //Now Reset Button and output message
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
                     Toast.makeText(MainActivity.this, "Saved the images!", Toast.LENGTH_SHORT).show();
+                    btnCapture.setClickable(true);
                 }
             });
+            //Start the display activity
+            //startActivity(intent);
         }
     }
 
@@ -906,6 +949,20 @@ public class MainActivity extends AppCompatActivity {
                     synchronized (imageData) {
                         if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
 
+
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
+                                    btnCapture.setClickable(false);
+                                    btnCapture.setBackgroundColor(Color.WHITE);
+                                }
+                            });
+                            //Now cancel processing new frames and set last frame captured
+                            recordingData = false;  //stop recording in image reader
+                            imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
+                            //For debugging
+
                             imageData.dataTest.add((data1DimTest)); //the raw data
                             imageData.dataTest.add(data1Dim);  //add data 1/0
                             imageData.dataTest.add(new int[]{upROI,lowROI,rightROI,leftROI});   //add ROI borders
@@ -922,24 +979,21 @@ public class MainActivity extends AppCompatActivity {
                                 imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
                                 if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
                                     Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                                    //UI thread to display saving and change button status
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
                                             Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
+                                            btnCapture.setClickable(false);
+                                            btnCapture.setBackgroundColor(Color.WHITE);
                                         }
                                     });
+                                    //Now cancel processing new frames and set last frame captured
                                     recordingData = false;  //stop recording in image reader
-                                    imageData.dataTest.add(data1Dim);  //add data to be saved
                                     imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
-                                    //start new activity to display output
-                                    Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
-                                    //get all data to the message string
-                                    String message = "";
-                                    for(int i=0; i<imageData.dataStream.size();i++) {
-                                        message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
-                                    }
-                                    intent.putExtra(EXTRA_MESSAGE,message);
-                                    startActivity(intent);
+                                    //For debugging
+                                    imageData.dataTest.add(data1Dim);  //add data to be saved
+
                                     //New Thread to handle saving
                                     //ThreadSaveData threadSaveData = new ThreadSaveData();
                                     threadSaveData.start();
