@@ -170,7 +170,11 @@ public class MainActivity extends AppCompatActivity {
                     });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
-
+                        try {
+                            Thread.currentThread().wait(10);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
                     synchronized (imageData) {
                         imageData.dataTest.clear();
@@ -425,7 +429,11 @@ public class MainActivity extends AppCompatActivity {
 
         public void run() {
             while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
-
+                try {
+                    Thread.currentThread().wait(10);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
             //set up new activity to display output
             Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
@@ -464,32 +472,22 @@ public class MainActivity extends AppCompatActivity {
 
                         for (int i = 0; i<imageData.dataTest.get(0).length; i++) {
                             if(data1Dim[i]>=1) {   //high point recognized
-                                lastHigh = true;
-                                counterHigh++;
-                            } else if(lastHigh) {   //this low but last was high
-                                lastHigh=false;
                                 counterHigh++;
                             } else if(counterHigh != 0) {   //two times low after some highs
-                                counterHigh--;  //counter adjust two last high pixel
+                                if(8<=counterHigh && counterHigh<=100) {
+                                    ones[counterHigh-1]++;
 
-                                if(5<=counterHigh && counterHigh<=80) {
-                                    if(counterHigh<100) {
-                                        ones[counterHigh]++;
-                                    } else {
-                                        ones[99]++;
-                                    }
-
-                                    startHigh = i - 1 - counterHigh;  //set new start of this normal high
+                                    startHigh = i - counterHigh;  //set new start of this normal high
                                     //Only if start bit called
                                     if(endHigh!=-1) {   //only do more if it was not the first high
-                                        if(startHigh-endHigh < 100) {
-                                            zeros[startHigh-endHigh]++;
+                                        if(startHigh-endHigh -1 <= 100) {
+                                            zeros[startHigh-endHigh -1 -1 ]++;
                                         } else {
                                             zeros[99]++;
                                         }
 
                                     }
-                                    endHigh = i - 2;  // a normal high and was processed and now set the end
+                                    endHigh = i - 1;  // a normal high and was processed and now set the end
 
                                 }
 
@@ -665,6 +663,8 @@ public class MainActivity extends AppCompatActivity {
             //Set Borders out of list
             lowROI+=RANGE_AROUND_MOST_STRIPES/2;
             upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
+            rightROI=30;
+            leftROI=height-30;
 
             //Now leftROI and rightROI are set
             //</editor-fold>
@@ -704,28 +704,27 @@ public class MainActivity extends AppCompatActivity {
                 //<editor-fold desc="Thresholding">
                 //Constants
                 int THRESH_STEP = 5;    //not too big to recognize small peeks
-                int THRESH_INTERVAL_MAX = 120;
-                int DISTINGUISH_VALUE_THRESH = 60;
+                int DISTINGUISH_VALUE_THRESH = 25;
+                double DISTINGUISH_FACTOR_THRESH = 0.3;
 
                 //Variables
                 int highestThresh = 0;
                 int lowestThresh = 250;
                 int lowestThreshPosition = 0;
                 int lowestThreshOld = -1;
+                int currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
                 int currentData;
                 boolean goesUp = true;
-                ArrayList<Integer> threshValues = new ArrayList<>(heightROI/THRESH_INTERVAL_MAX);
-                int counterThreshSteps = 0;
+                ArrayList<Integer> threshValues = new ArrayList<>();
 
                 for(int i=0; i<heightROI;i+=THRESH_STEP) {  //<= THRESH_STEP values not considered
                     currentData = data1Dim[i];
-                    counterThreshSteps++;
                     if(goesUp) {
                         if(currentData<lowestThresh) {
                             lowestThresh=currentData;
                             lowestThreshPosition = i;
                         }
-                        if(currentData>lowestThresh+DISTINGUISH_VALUE_THRESH) {
+                        if(currentData>lowestThresh+currentDistinguishThresh) {
                             if(lowestThreshOld!=-1) {
                                 //now do everything to save the high
                                 if(lowestThresh>lowestThreshOld) {
@@ -735,8 +734,12 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 threshValues.add(lowestThreshPosition);
 
+                                currentDistinguishThresh= (int) ((highestThresh-lowestThresh)* DISTINGUISH_FACTOR_THRESH);
+                                if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
+                                    currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
+                                }
+
                             }
-                            counterThreshSteps = 0;
                             goesUp = false;
                             lowestThreshOld = lowestThresh;
                             lowestThresh=250;
@@ -746,21 +749,19 @@ public class MainActivity extends AppCompatActivity {
                         if(currentData>highestThresh) {
                             highestThresh = currentData;
                         }
-                        if(currentData<highestThresh-DISTINGUISH_VALUE) {
+                        if(currentData<highestThresh-currentDistinguishThresh) {
                             goesUp = true;
+                            currentDistinguishThresh= (int) ((highestThresh-lowestThreshOld)* DISTINGUISH_FACTOR_THRESH);
+                            if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
+                                currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
+                            }
                         }
-                    }
-                    if(counterThreshSteps>=THRESH_INTERVAL_MAX/THRESH_STEP) {
-                        goesUp=true;
-                        highestThresh = 0;
-                        lowestThresh = 250;
-                        counterThreshSteps = 0;
                     }
                 }
                 //</editor-fold>
 
                 if (threshValues.size()>=COUNT_OF_STRIPES) {
-                    //Beta will be implemented in decoding for faster processing
+                    //Beta; will be implemented in decoding for faster processing
                     //<editor-fold desc="Downsampling">
                     //Variables
                     int counterThreshIntervals = 0;
@@ -792,10 +793,10 @@ public class MainActivity extends AppCompatActivity {
                     int bytePart = 0;           //checks if already first 6bit captured of the 12
                     int counterBytes = 0;      //counts the bytes
                     int counterBits = 0;       //counter of captured bits
-                    boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
                     int counterHigh=0;        //counts how many highs in a row
                     int endHigh = -1;         //saves end pixel of a high
                     int startHigh;            //saves start pixel of a high
+                    int counterLow;
                     int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
                     boolean error = false;
                     boolean startError = false;
@@ -823,26 +824,22 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         if(data1Dim[i]>=1) {   //high point recognized
-                            lastHigh = true;
-                            counterHigh++;
-                        } else if(lastHigh) {   //this low but last was high
-                            lastHigh=false;
                             counterHigh++;
                         } else if(counterHigh != 0) {   //two times low after some highs
-                            counterHigh--;  //counter adjust two last high pixel
                             if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
                                 lastBit = 2;
-                                endHigh = i - 2;
+                                endHigh = i - 1;
                                 if(!sequenceFinished) {
                                     error = true;
                                     startError = true;
                                 }
                                 sequenceFinished=false;
-                            } else if(5<=counterHigh && counterHigh<=27) { //check if it was a normal high
-                                startHigh = i - 1 - counterHigh;  //set new start of this normal high
+                            } else if(8<=counterHigh && counterHigh<=27) { //check if it was a normal high
+                                startHigh = i - counterHigh;  //set new start of this normal high
                                 //Only if start bit called
                                 if(endHigh!=-1) {   //only do more if it was not the first high
-                                    if(1 <= startHigh-endHigh && startHigh-endHigh <= 1) {  //check if two start highs
+                                    counterLow = startHigh-endHigh-1;   //set the zeros between start and end; -1 as want to get zeros in between and not the distance
+                                    if(1 <= counterLow && counterLow <= 9) {  //check if two start highs
                                         //start bit
                                         lastBit = 2;
                                         if(!sequenceFinished) {
@@ -851,7 +848,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                         sequenceFinished=false;
                                     } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                        if(6 <= startHigh-endHigh && startHigh-endHigh <= 30){  //check if 0.2 in between to highs
+                                        if(10 <= counterLow && counterLow <= 27){  //check if 0.2 in between to highs
                                             //0,2
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 1
@@ -863,7 +860,7 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                                 Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                             }
-                                        } else if(31 <= startHigh-endHigh && startHigh-endHigh <= 45){  //check if 0.4 in between to highs
+                                        } else if(28 <= counterLow && counterLow <= 45){  //check if 0.4 in between to highs
                                             //0,4
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 0
@@ -875,7 +872,7 @@ public class MainActivity extends AppCompatActivity {
                                                 counterBits++;
                                                 lastBit = 1;
                                             }
-                                        } else if(46 <= startHigh-endHigh && startHigh-endHigh <= 62){  //check if 0.6 in between to highs
+                                        } else if(46 <= counterLow && counterLow <= 62){  //check if 0.6 in between to highs
                                             //0,6
                                             if(lastBit == 1) {
                                                 //its a 0
@@ -923,7 +920,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                     }
                                 }
-                                endHigh = i - 2;  // a normal high and was processed and now set the end
+                                endHigh = i - 1;  // a normal high and was processed and now set the end
                             } else if(counterHigh>=13){
                                 //1. error as sequence is interrupted - too many high values
                                 Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
