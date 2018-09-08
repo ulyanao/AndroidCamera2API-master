@@ -142,25 +142,28 @@ public class MainActivity extends AppCompatActivity {
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
         textureView.setSurfaceTextureListener(textureListener);
+        //Get Button object
         btnCapture = (Button) findViewById(R.id.btnCapture);
+        //Set up listener and handler of button click
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                btnCapture.setClickable(false);
-                recordingData = !recordingData;
-                synchronized (imageData) {
+                btnCapture.setClickable(false);     //if clicked disable until proceeded
+                recordingData = !recordingData;     //first disable recording data to stop capturing frames
+                synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
                     if (!recordingData) {
                         imageData.lastFrameCaptured = true;
                     }
                 }
+                //Now distinguish between start and stopped
                 if(recordingData) {
                     runOnUiThread(new Runnable() {
                         @Override
-                        public void run() {
+                        public void run() { //print out start message
                             Toast.makeText(MainActivity.this, "Image recording has started!", Toast.LENGTH_SHORT).show();
                         }
                     });
-                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON);
+                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
                 } else {
                     runOnUiThread(new Runnable() {
                         @Override
@@ -169,17 +172,17 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
-                    while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
+                    while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
                         Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
-                    synchronized (imageData) {
+                    synchronized (imageData) {  //if all done clear all saved stuff; thread save
                         imageData.dataTest.clear();
                         imageData.dataStream.clear();
                         imageData.lastFrameCaptured=false;
                         a=0;
                     }
                 }
-                btnCapture.setClickable(true);
+                btnCapture.setClickable(true);  //let the user click again
             }
         });
     }
@@ -322,12 +325,12 @@ public class MainActivity extends AppCompatActivity {
                         a=1;
                         startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
-                        byte[] data = new byte[image.getWidth() * image.getHeight()];
+                        byte[] data = new byte[image.getWidth() * image.getHeight()];   //get byte to save image data
                         //Get y plane of image and path buffer to data
-                        image.getPlanes()[0].getBuffer().get(data);
+                        image.getPlanes()[0].getBuffer().get(data); //get data out of image
                         image.close();
                         try {
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone()));   //start thread to proceed the data
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -423,7 +426,7 @@ public class MainActivity extends AppCompatActivity {
     private class ThreadSaveData extends Thread {
 
         public void run() {
-            while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
+            while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //wait until all threads are finished
                 Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
             }
             //set up new activity to display output
@@ -432,7 +435,7 @@ public class MainActivity extends AppCompatActivity {
             String message = "";
 
             //Now get all the data out of imageData
-            synchronized (imageData) {
+            synchronized (imageData) {  //be thread save, double secure
                 try {
 
                     int[] data1DimTest = imageData.dataTest.get(0);
@@ -520,7 +523,7 @@ public class MainActivity extends AppCompatActivity {
 
                 //Set up the message for new activity out of imageData
                 for(int i=0; i<imageData.dataStream.size();i++) {
-                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));  //get decoded bytes out of dataStream
                 }
                 intent.putExtra(EXTRA_MESSAGE,message);
 
@@ -678,9 +681,10 @@ public class MainActivity extends AppCompatActivity {
                 //Constants
                 int STEP_1DIM_ROW = 1;
 
+                //two loops to get only needed lines and columns
                 for(int i=rightROI; i<leftROI; i++) {
                     for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
-                        sumOfLine += (dataPlanes[i*width+n] & 0xff);
+                        sumOfLine += (dataPlanes[i*width+n] & 0xff);    //save byte data as int and sum up and create mean
                         counterSamples++;
                     }
                     data1DimTest[counterLines] = sumOfLine/counterSamples;
@@ -706,25 +710,27 @@ public class MainActivity extends AppCompatActivity {
                 int currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
                 int currentData;
                 boolean goesUp = true;
-                ArrayList<Integer> threshValues = new ArrayList<>();
+                ArrayList<Integer> threshValues = new ArrayList<>();    //where the new borders and thresh values of thresh's are saved
 
-                for(int i=0; i<heightROI;i+=THRESH_STEP) {  //<= THRESH_STEP values not considered
-                    currentData = data1Dim[i];
-                    if(goesUp) {
-                        if(currentData<lowestThresh) {
+                for(int i=0; i<heightROI;i+=THRESH_STEP) {  //loop of data 1 dim
+                    currentData = data1Dim[i];  //buffer of current data
+                    if(goesUp) {    //if goes Up is true, search for a increase of specific amount to recognize a peek
+                        if(currentData<lowestThresh) {  //get lowest
                             lowestThresh=currentData;
                             lowestThreshPosition = i;
                         }
-                        if(currentData>lowestThresh+currentDistinguishThresh) {
-                            if(lowestThreshOld!=-1) {
+                        if(currentData>lowestThresh+currentDistinguishThresh) { //look for increase
+                            if(lowestThreshOld!=-1) {   //only do if it was at least second increase
                                 //now do everything to save the high
-                                if(lowestThresh>lowestThreshOld) {
+                                //save mean and borders of thresholding with the highest and lowest
+                                if(lowestThresh>lowestThreshOld) {  //take higher low value, as normally better
                                     threshValues.add((lowestThresh+highestThresh)/2);
                                 }else {
                                     threshValues.add((lowestThreshOld+highestThresh)/2);
                                 }
                                 threshValues.add(lowestThreshPosition);
 
+                                //set the distinguish value according to the current last peek to low value
                                 currentDistinguishThresh= (int) ((highestThresh-lowestThresh)* DISTINGUISH_FACTOR_THRESH);
                                 if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
                                     currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
@@ -736,13 +742,13 @@ public class MainActivity extends AppCompatActivity {
                             lowestThresh=250;
                             highestThresh=0;
                         }
-                    } else {
-                        if(currentData>highestThresh) {
+                    } else {    //if goes down, looking for a low
+                        if(currentData>highestThresh) { //save highest
                             highestThresh = currentData;
                         }
-                        if(currentData<highestThresh-currentDistinguishThresh) {
+                        if(currentData<highestThresh-currentDistinguishThresh) {    //look if decrease is recognized
                             goesUp = true;
-                            currentDistinguishThresh= (int) ((highestThresh-lowestThreshOld)* DISTINGUISH_FACTOR_THRESH);
+                            currentDistinguishThresh= (int) ((highestThresh-lowestThreshOld)* DISTINGUISH_FACTOR_THRESH);   //set new distinguish value
                             if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
                                 currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
                             }
@@ -760,13 +766,14 @@ public class MainActivity extends AppCompatActivity {
                     int threshIntervalPosition;
                     threshValueBuffer = 255;
                     threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
-
+                    //now loop and set 1 or 0 according to the saved thresh values
                     for(int i=0;i<heightROI;i++) {
                         if(data1Dim[i]>threshValueBuffer){
                             data1Dim[i] = 1;
                         } else {
                             data1Dim[i] = 0;
                         }
+                        //set the new thresh value if interval is exceeded,but care about ou of bound exception
                         if(i>=threshIntervalPosition && threshValues.size() > counterThreshIntervals + 2) {
                             counterThreshIntervals+=2;
                             threshValueBuffer = threshValues.get(counterThreshIntervals);
