@@ -170,11 +170,7 @@ public class MainActivity extends AppCompatActivity {
                     });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
-                        try {
-                            Thread.currentThread().wait(10);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+                        Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
                     synchronized (imageData) {
                         imageData.dataTest.clear();
@@ -321,7 +317,6 @@ public class MainActivity extends AppCompatActivity {
                 public void onImageAvailable(ImageReader imageReader) {
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
-                    Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
 
                     if (recordingData && a == 0) {
                         a=1;
@@ -429,11 +424,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void run() {
             while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {
-                try {
-                    Thread.currentThread().wait(10);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
+                Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
             }
             //set up new activity to display output
             Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
