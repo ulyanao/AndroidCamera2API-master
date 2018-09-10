@@ -580,8 +580,8 @@ public class MainActivity extends AppCompatActivity {
             //Set Borders
             lowROI+=RANGE_AROUND_MOST_STRIPES/2;
             upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
-            rightROI=30;
-            leftROI=height-30;
+            rightROI=0;
+            leftROI=height;
             //</editor-fold>
             //</editor-fold>
 
