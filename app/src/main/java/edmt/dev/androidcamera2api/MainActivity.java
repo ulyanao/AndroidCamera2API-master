@@ -308,6 +308,8 @@ public class MainActivity extends AppCompatActivity {
                 width = yuvSizes[0].getWidth();
                 height = yuvSizes[0].getHeight();
             }
+            width=1900;
+            height=1080;
             //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
             imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
             recordingData = false;
@@ -503,10 +505,8 @@ public class MainActivity extends AppCompatActivity {
         public void run() {
             //Initialization
             byte[] dataPlanes = this.data;
-            int width = 4032;
-            int height = 3024;
-            double resizeWidth = width/4032;
-            double resizeHeight = height/3024;
+            int width = 1900;
+            int height = 1080;
 
             //<editor-fold desc="ROI">
             //Variables
@@ -523,12 +523,12 @@ public class MainActivity extends AppCompatActivity {
             int counterStripesHighest = 0;
             int mostStripes = 0;
             //Constants
-            int STEP_ROI_ROW = 25;
-            int STEP_ROI_PIXEL = 8;         //min low is 8
-            int DISTINGUISH_VALUE = 50;     //from 0 to 255
-            int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
-            int RANGE_AROUND_MOST_STRIPES = 20;
-            int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
+            int STEP_ROI_ROW = 20;
+            int STEP_ROI_PIXEL = 2;         //max low is 8 as smallest low
+            int DISTINGUISH_VALUE = 60;     //from 0 to 255
+            int INTERVAL_OF_STRIPES = 40;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
+            int RANGE_AROUND_MOST_STRIPES =15;
+            int COUNT_OF_STRIPES = 3;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
             //Loops
@@ -576,6 +576,7 @@ public class MainActivity extends AppCompatActivity {
                 lowestInRow = 250;
                 counterInterval = 0;
                 counterStripes = 0;
+                counterStripesHighest=0;
             }
             //Set Borders
             lowROI+=RANGE_AROUND_MOST_STRIPES/2;
@@ -617,7 +618,7 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 5;    //not too big to recognize small peeks
+                int THRESH_STEP = 1;    //not too big to recognize small peeks
                 int DISTINGUISH_VALUE_THRESH = 25;
                 double DISTINGUISH_FACTOR_THRESH = 0.3;
 
@@ -743,7 +744,7 @@ public class MainActivity extends AppCompatActivity {
                         if(data1Dim[i]>=1) {   //high point recognized
                             counterHigh++;
                         } else if(counterHigh != 0) {   //two times low after some highs
-                            if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
+                            if(13<=counterHigh && counterHigh<=30) {    //check if high was startBit without low parts
                                 lastBit = 2;
                                 endHigh = i - 1;
                                 if(!sequenceFinished) {
@@ -751,12 +752,12 @@ public class MainActivity extends AppCompatActivity {
                                     startError = true;
                                 }
                                 sequenceFinished=false;
-                            } else if(8<=counterHigh && counterHigh<=27) { //check if it was a normal high
+                            } else if(4<=counterHigh && counterHigh<=12) { //check if it was a normal high
                                 startHigh = i - counterHigh;  //set new start of this normal high
                                 //Only if start bit called
                                 if(endHigh!=-1) {   //only do more if it was not the first high
                                     counterLow = startHigh-endHigh-1;   //set the zeros between start and end; -1 as want to get zeros in between and not the distance
-                                    if(1 <= counterLow && counterLow <= 9) {  //check if two start highs
+                                    if(0 <= counterLow && counterLow <= 0) {  //check if two start highs
                                         //start bit
                                         lastBit = 2;
                                         if(!sequenceFinished) {
@@ -765,7 +766,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                         sequenceFinished=false;
                                     } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                        if(10 <= counterLow && counterLow <= 27){  //check if 0.2 in between to highs
+                                        if(2 <= counterLow && counterLow <= 10){  //check if 0.2 in between to highs
                                             //0,2
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 1
@@ -777,7 +778,7 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                                 Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                             }
-                                        } else if(28 <= counterLow && counterLow <= 45){  //check if 0.4 in between to highs
+                                        } else if(10 <= counterLow && counterLow <= 21){  //check if 0.4 in between to highs
                                             //0,4
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 0
@@ -789,7 +790,7 @@ public class MainActivity extends AppCompatActivity {
                                                 counterBits++;
                                                 lastBit = 1;
                                             }
-                                        } else if(46 <= counterLow && counterLow <= 62){  //check if 0.6 in between to highs
+                                        } else if(22 <= counterLow && counterLow <= 40){  //check if 0.6 in between to highs
                                             //0,6
                                             if(lastBit == 1) {
                                                 //its a 0
