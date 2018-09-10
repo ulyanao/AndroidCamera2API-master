@@ -510,17 +510,15 @@ public class MainActivity extends AppCompatActivity {
 
             //<editor-fold desc="ROI">
             //Variables
-            int upROI = -1;     //data array starts top right corner and first columns than rows, ends left bottom
+            int upROI;     //data array starts top right corner and first columns than rows, ends left bottom
             int lowROI = -1;    //0 is first position, 1 is second
-            int rightROI = -1;
-            int leftROI = -1;
-            int rightUpROIBuffer = -1;
+            int rightROI;
+            int leftROI;
             int borderROIBuffer = -1;
             int highestInRow = 0;
             int lowestInRow = 250;
             int byteToIntBuffer;
             int counterInterval = 0;
-            boolean firstDistinguished = false;
             int counterStripes = 0;
             int counterStripesHighest = 0;
             int mostStripes = 0;
@@ -548,10 +546,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                     if(highestInRow-lowestInRow > DISTINGUISH_VALUE) {  //Check if bright an dark stripes can be distinguished
                         borderROIBuffer = i+n*width;
-                        if (!firstDistinguished) {
-                            rightUpROIBuffer = borderROIBuffer;
-                            firstDistinguished = true;
-                        }
                         counterStripes++;       //counter++ stripes
 
                         //Reset interval values to start new interval
@@ -576,31 +570,24 @@ public class MainActivity extends AppCompatActivity {
                     mostStripes=counterStripesHighest;
                     //Set the left and low ROI Border
                     lowROI = borderROIBuffer%width;
-                    leftROI = borderROIBuffer/width;       //Add value to left array list
-                    //Set right ROI of buffer of right and up
-                    rightROI = rightUpROIBuffer/width;       //Add value to right buffer
                 }
                 //Reset highest and lowest and reset row
                 highestInRow = 0;
                 lowestInRow = 250;
                 counterInterval = 0;
-                firstDistinguished = false;
                 counterStripes = 0;
             }
-            //Set Borders out of list
+            //Set Borders
             lowROI+=RANGE_AROUND_MOST_STRIPES/2;
             upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
             rightROI=30;
             leftROI=height-30;
-
-            //Now leftROI and rightROI are set
             //</editor-fold>
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
-            if(!(rightROI == -1 || leftROI == -1 || upROI == -1|| lowROI== -1) && mostStripes>=COUNT_OF_STRIPES) {
+            if(mostStripes>=COUNT_OF_STRIPES) {
                 //New dimensions of array
-                int widthROI = lowROI-upROI;
                 int heightROI = leftROI-rightROI;
 
                 //<editor-fold desc="1 dim array">
