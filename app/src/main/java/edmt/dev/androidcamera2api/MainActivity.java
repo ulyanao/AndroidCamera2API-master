@@ -587,7 +587,7 @@ public class MainActivity extends AppCompatActivity {
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
-            if(mostStripes>=COUNT_OF_STRIPES) {
+            if(mostStripes>=COUNT_OF_STRIPES && lowROI<width && upROI>=0) {
                 //New dimensions of array
                 int heightROI = leftROI-rightROI;
 
