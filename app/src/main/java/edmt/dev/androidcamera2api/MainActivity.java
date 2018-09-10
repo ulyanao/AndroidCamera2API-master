@@ -505,15 +505,11 @@ public class MainActivity extends AppCompatActivity {
             byte[] dataPlanes = this.data;
             int width = 4032;
             int height = 3024;
-            double resizeWidth = width/4032;
-            double resizeHeight = height/3024;
 
             //<editor-fold desc="ROI">
             //Variables
             int upROI;     //data array starts top right corner and first columns than rows, ends left bottom
             int lowROI = -1;    //0 is first position, 1 is second
-            int rightROI;
-            int leftROI;
             int borderROIBuffer = -1;
             int highestInRow = 0;
             int lowestInRow = 250;
@@ -580,20 +576,25 @@ public class MainActivity extends AppCompatActivity {
             //Set Borders
             lowROI+=RANGE_AROUND_MOST_STRIPES/2;
             upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
-            rightROI=0;
-            leftROI=height;
+            if(upROI<0) {
+                upROI=0;
+                lowROI=RANGE_AROUND_MOST_STRIPES;
+            }
+            if(lowROI>=width) {
+                lowROI=width-1;
+                upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
+            }
             //</editor-fold>
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
             if(mostStripes>=COUNT_OF_STRIPES) {
                 //New dimensions of array
-                int heightROI = leftROI-rightROI;
 
                 //<editor-fold desc="1 dim array">
                 //1 dim array by calculating mean of column
                 //Variables
-                int[] data1Dim = new int[heightROI];
+                int[] data1Dim = new int[height];
                 int sumOfLine = 0;
                 int counterSamples = 0;
                 int counterLines=0;
@@ -602,7 +603,7 @@ public class MainActivity extends AppCompatActivity {
                 int STEP_1DIM_ROW = 1;
 
                 //two loops to get only needed lines and columns
-                for(int i=rightROI; i<leftROI; i++) {
+                for(int i=0; i<height; i++) {
                     for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
                         sumOfLine += (dataPlanes[i*width+n] & 0xff);    //save byte data as int and sum up and create mean
                         counterSamples++;
@@ -631,7 +632,7 @@ public class MainActivity extends AppCompatActivity {
                 boolean goesUp = true;
                 ArrayList<Integer> threshValues = new ArrayList<>();    //where the new borders and thresh values of thresh's are saved
 
-                for(int i=0; i<heightROI;i+=THRESH_STEP) {  //loop of data 1 dim
+                for(int i=0; i<height;i+=THRESH_STEP) {  //loop of data 1 dim
                     currentData = data1Dim[i];  //buffer of current data
                     if(goesUp) {    //if goes Up is true, search for a increase of specific amount to recognize a peek
                         if(currentData<lowestThresh) {  //get lowest
@@ -686,7 +687,7 @@ public class MainActivity extends AppCompatActivity {
                     threshValueBuffer = 255;
                     threshIntervalPosition=threshValues.get(counterThreshIntervals+1);
                     //now loop and set 1 or 0 according to the saved thresh values
-                    for(int i=0;i<heightROI;i++) {
+                    for(int i=0;i<height;i++) {
                         if(data1Dim[i]>threshValueBuffer){
                             data1Dim[i] = 1;
                         } else {
@@ -721,7 +722,7 @@ public class MainActivity extends AppCompatActivity {
 
                     //<editor-fold desc="Algorithm">
 
-                    for (int i = 0; i<heightROI; i++) {
+                    for (int i = 0; i<height; i++) {
                         if(error) {
                             error = false;  //reset error flag
                             data6Bit = 0;    //the current buffered data is reset
