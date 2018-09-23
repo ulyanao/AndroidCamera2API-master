@@ -744,7 +744,7 @@ public class MainActivity extends AppCompatActivity {
                         if(data1Dim[i]>=1) {   //high point recognized
                             counterHigh++;
                         } else if(counterHigh != 0) {   //two times low after some highs
-                            if(28<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
+                            if(30<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
                                 lastBit = 2;
                                 endHigh = i - 1;
                                 if(!sequenceFinished) {
@@ -752,12 +752,12 @@ public class MainActivity extends AppCompatActivity {
                                     startError = true;
                                 }
                                 sequenceFinished=false;
-                            } else if(8<=counterHigh && counterHigh<=27) { //check if it was a normal high
+                            } else if(7<=counterHigh && counterHigh<=29) { //check if it was a normal high
                                 startHigh = i - counterHigh;  //set new start of this normal high
                                 //Only if start bit called
                                 if(endHigh!=-1) {   //only do more if it was not the first high
                                     counterLow = startHigh-endHigh-1;   //set the zeros between start and end; -1 as want to get zeros in between and not the distance
-                                    if(1 <= counterLow && counterLow <= 9) {  //check if two start highs
+                                    if(1 <= counterLow && counterLow <= 8) {  //check if two start highs
                                         //start bit
                                         lastBit = 2;
                                         if(!sequenceFinished) {
@@ -766,7 +766,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                         sequenceFinished=false;
                                     } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                        if(10 <= counterLow && counterLow <= 27){  //check if 0.2 in between to highs
+                                        if(8 <= counterLow && counterLow <= 23){  //check if 0.2 in between to highs
                                             //0,2
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 1
@@ -778,7 +778,7 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                                 Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                             }
-                                        } else if(28 <= counterLow && counterLow <= 45){  //check if 0.4 in between to highs
+                                        } else if(24 <= counterLow && counterLow <= 42){  //check if 0.4 in between to highs
                                             //0,4
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 0
@@ -790,7 +790,7 @@ public class MainActivity extends AppCompatActivity {
                                                 counterBits++;
                                                 lastBit = 1;
                                             }
-                                        } else if(46 <= counterLow && counterLow <= 62){  //check if 0.6 in between to highs
+                                        } else if(43 <= counterLow && counterLow <= 62){  //check if 0.6 in between to highs
                                             //0,6
                                             if(lastBit == 1) {
                                                 //its a 0
