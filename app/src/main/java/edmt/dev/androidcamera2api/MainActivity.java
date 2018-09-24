@@ -72,9 +72,10 @@ public class MainActivity extends AppCompatActivity {
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
     long startTime;
-    long endTime;
+    long endTimeGood;
+    long endTimeThrough;
     long middleTime =330;
-    short test = 0;
+
 
 
     //Manual camera settings
@@ -153,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
                 synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
                     if (!recordingData) {
                         imageData.lastFrameCaptured = true;
-                        endTime = System.nanoTime();
+                        endTimeGood = System.nanoTime();
                     }
                 }
                 //Now distinguish between start and stopped
@@ -313,6 +314,7 @@ public class MainActivity extends AppCompatActivity {
             //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
             imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
             recordingData = false;
+            imageData.throughputCounter = 0;
 
             //<editor-fold desc="Listener of image reader">
             final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
@@ -483,6 +485,7 @@ public class MainActivity extends AppCompatActivity {
         public List<int[]> dataTest = new ArrayList<>();
         public List<Byte> dataStream = new ArrayList<>();
         public boolean lastFrameCaptured;
+        public int throughputCounter;
 
         ImageData() {
             lastFrameCaptured = false;
@@ -867,8 +870,18 @@ public class MainActivity extends AppCompatActivity {
                                     imageData.dataStream.add((byte) 0);
                                 }
                                 imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
+                                imageData.throughputCounter++;
+                                if(imageData.throughputCounter==9) {
+                                    endTimeGood = System.nanoTime();
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Toast.makeText(MainActivity.this, "Though: " + (double)((endTimeGood -startTime)/1000000), Toast.LENGTH_LONG).show();
+                                        }
+                                    });
+                                }
                                 boolean over = false;
-                                if(imageData.dataStream.size()==5) {
+                                if(imageData.dataStream.size()==10) {
                                     over = true;
                                     for (int checkData: imageData.dataStream
                                          ) {
@@ -879,12 +892,14 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                                 if (over) {  //my condition to stop
+                                    endTimeGood = System.nanoTime();
                                     Log.d("TimeCheck", "End and time in middle: " + middleTime);
                                     //UI thread to display saving and change button status
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!: [ms]  " + (startTime-endTime)/1000000, Toast.LENGTH_SHORT).show();
+                                            Toast.makeText(MainActivity.this, "Good: "+imageData.throughputCounter+"; " + (double)((endTimeGood -startTime)/1000000), Toast.LENGTH_LONG).show();
+                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
                                             btnCapture.setClickable(false);
                                             btnCapture.setBackgroundColor(Color.WHITE);
                                         }
