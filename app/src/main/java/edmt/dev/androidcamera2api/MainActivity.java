@@ -153,10 +153,12 @@ public class MainActivity extends AppCompatActivity {
                 synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
                     if (!recordingData) {
                         imageData.lastFrameCaptured = true;
+                        endTime = System.nanoTime();
                     }
                 }
                 //Now distinguish between start and stopped
                 if(recordingData) {
+                    startTime = System.nanoTime();
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() { //print out start message
@@ -173,7 +175,7 @@ public class MainActivity extends AppCompatActivity {
                     });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
-                        Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
+                        Log.d("Threads","Waiting for threads to finish, before resetting to capture available again; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
                     synchronized (imageData) {  //if all done clear all saved stuff; thread save
                         imageData.dataTest.clear();
@@ -321,7 +323,6 @@ public class MainActivity extends AppCompatActivity {
                     Image image = imageReader.acquireNextImage();
 
                     if (recordingData) {    //check variable if button pressed to start recording
-                        startTime = System.nanoTime();
                         //Set up the data which stores the data of the image plane
                         byte[] data = new byte[image.getWidth() * image.getHeight()];   //get byte to save image data
                         //Get y plane of image and path buffer to data
@@ -333,8 +334,6 @@ public class MainActivity extends AppCompatActivity {
                             e.printStackTrace();
                         }
 
-                        endTime = System.nanoTime();
-                        middleTime = (middleTime + (endTime - startTime) / 100000) / 2;
                     }else{
                         image.close();
                     }
@@ -423,7 +422,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void run() {
             while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //wait until all threads are finished
-                Log.d("Threads","The threads in Thread Manager: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
+                Log.d("Threads","Waiting for threads to finish, before saving; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
             }
             //set up new activity to display output
             Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
@@ -863,19 +862,29 @@ public class MainActivity extends AppCompatActivity {
 
                     synchronized (imageData) {
                         if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
-                            Log.d("Image","Thread processed picture: "+Thread.currentThread().getName() +";  And it was the frame: "+test);
                             for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
                                 while(imageData.dataStream.size()<data4Bit[n]) {
                                     imageData.dataStream.add((byte) 0);
                                 }
                                 imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
-                                if (imageData.dataStream.size()==3 && imageData.dataStream.get(0)!=0 && imageData.dataStream.get(1)!=0 && imageData.dataStream.get(2)!=0) {  //my condition to stop
+                                boolean over = false;
+                                if(imageData.dataStream.size()==5) {
+                                    over = true;
+                                    for (int checkData: imageData.dataStream
+                                         ) {
+
+                                        if(checkData==0) {
+                                            over = false;
+                                        }
+                                    }
+                                }
+                                if (over) {  //my condition to stop
                                     Log.d("TimeCheck", "End and time in middle: " + middleTime);
                                     //UI thread to display saving and change button status
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
+                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!: [ms]  " + (startTime-endTime)/1000000, Toast.LENGTH_SHORT).show();
                                             btnCapture.setClickable(false);
                                             btnCapture.setBackgroundColor(Color.WHITE);
                                         }
@@ -892,8 +901,6 @@ public class MainActivity extends AppCompatActivity {
                                     break;  //break from loop as enough bytes captured
                                 }
                             }
-                        } else {
-                            Log.d("Image","Thread didn't save data, as after saving was done: "+Thread.currentThread().getName());
                         }
                     }
                 }
