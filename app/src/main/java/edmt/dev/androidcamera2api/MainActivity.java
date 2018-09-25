@@ -71,10 +71,9 @@ public class MainActivity extends AppCompatActivity {
     //Image processing
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
-    long startTime;
-    long endTimeGood;
-    long endTimeThrough;
-    long middleTime =330;
+    private long startTimeGood;
+    private long endTimeGood;
+    private long timeFrames = 0;
 
 
 
@@ -159,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 //Now distinguish between start and stopped
                 if(recordingData) {
-                    startTime = System.nanoTime();
+                    startTimeGood = System.nanoTime();
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() { //print out start message
@@ -182,6 +181,7 @@ public class MainActivity extends AppCompatActivity {
                         imageData.dataTest.clear();
                         imageData.dataStream.clear();
                         imageData.lastFrameCaptured=false;
+                        timeFrames=0;
                     }
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -325,6 +325,7 @@ public class MainActivity extends AppCompatActivity {
                     Image image = imageReader.acquireNextImage();
 
                     if (recordingData) {    //check variable if button pressed to start recording
+                        timeFrames++;
                         //Set up the data which stores the data of the image plane
                         byte[] data = new byte[image.getWidth() * image.getHeight()];   //get byte to save image data
                         //Get y plane of image and path buffer to data
@@ -466,6 +467,7 @@ public class MainActivity extends AppCompatActivity {
                 imageData.dataTest.clear();
                 imageData.dataStream.clear();
                 imageData.lastFrameCaptured=false;
+                timeFrames=0;
             }
 
             //Now Reset Button and output message
@@ -526,7 +528,7 @@ public class MainActivity extends AppCompatActivity {
             int DISTINGUISH_VALUE = 50;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
             int RANGE_AROUND_MOST_STRIPES = 20;
-            int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
+            int COUNT_OF_STRIPES = 8;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
             //Loops
@@ -620,9 +622,9 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 5;    //not too big to recognize small peeks
-                int DISTINGUISH_VALUE_THRESH = 25;
-                double DISTINGUISH_FACTOR_THRESH = 0.3;
+                int THRESH_STEP = 4;    //not too big to recognize small peeks
+                int DISTINGUISH_VALUE_THRESH = 20;
+                double DISTINGUISH_FACTOR_THRESH = 0.2;
 
                 //Variables
                 int highestThresh = 0;
@@ -754,7 +756,7 @@ public class MainActivity extends AppCompatActivity {
                                     startError = true;
                                 }
                                 sequenceFinished=false;
-                            } else if(7<=counterHigh && counterHigh<=29) { //check if it was a normal high
+                            } else if(8<=counterHigh && counterHigh<=29) { //check if it was a normal high
                                 startHigh = i - counterHigh;  //set new start of this normal high
                                 //Only if start bit called
                                 if(endHigh!=-1) {   //only do more if it was not the first high
@@ -876,7 +878,7 @@ public class MainActivity extends AppCompatActivity {
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            Toast.makeText(MainActivity.this, "Though: " + (double)((endTimeGood -startTime)/1000000), Toast.LENGTH_LONG).show();
+                                            Toast.makeText(MainActivity.this, "Though: " + (double)((endTimeGood - startTimeGood)/1000000), Toast.LENGTH_LONG).show();
                                         }
                                     });
                                 }
@@ -893,12 +895,13 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 if (over) {  //my condition to stop
                                     endTimeGood = System.nanoTime();
-                                    Log.d("TimeCheck", "End and time in middle: " + middleTime);
+                                    Log.d("TimeCheck", "End and time in middle: " + (endTimeGood-startTimeGood)/timeFrames/1000000);
                                     //UI thread to display saving and change button status
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            Toast.makeText(MainActivity.this, "Good: "+imageData.throughputCounter+"; " + (double)((endTimeGood -startTime)/1000000), Toast.LENGTH_LONG).show();
+                                            Toast.makeText(MainActivity.this, "Good: "+imageData.throughputCounter+"; " + (double)((endTimeGood - startTimeGood)/1000000), Toast.LENGTH_LONG).show();
+                                            Toast.makeText(MainActivity.this, "FrameTime: "+(endTimeGood-startTimeGood)/timeFrames/1000000, Toast.LENGTH_SHORT).show();
                                             Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
                                             btnCapture.setClickable(false);
                                             btnCapture.setBackgroundColor(Color.WHITE);
