@@ -73,6 +73,9 @@ public class MainActivity extends AppCompatActivity {
     public boolean recordingData;
     private long startTimeGood;
     private long endTimeGood;
+    private long startTimeMiddle;
+    private long endTimeMiddle;
+    private long middleTime = 0;
     private long timeFrames = 0;
 
 
@@ -182,6 +185,7 @@ public class MainActivity extends AppCompatActivity {
                         imageData.dataStream.clear();
                         imageData.lastFrameCaptured=false;
                         timeFrames=0;
+                        middleTime = 0;
                     }
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -321,6 +325,7 @@ public class MainActivity extends AppCompatActivity {
                 //If image is passed to surface by capturing, the image is available in the reader and this method is called
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
+                    startTimeMiddle=System.nanoTime();
                     //Get image from image reader
                     Image image = imageReader.acquireNextImage();
 
@@ -336,6 +341,9 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+
+                        endTimeMiddle=System.nanoTime();
+                        middleTime = middleTime + (endTimeMiddle-startTimeMiddle)/1000000;
 
                     }else{
                         image.close();
@@ -468,6 +476,7 @@ public class MainActivity extends AppCompatActivity {
                 imageData.dataStream.clear();
                 imageData.lastFrameCaptured=false;
                 timeFrames=0;
+                middleTime=0;
             }
 
             //Now Reset Button and output message
@@ -895,13 +904,13 @@ public class MainActivity extends AppCompatActivity {
                                 }
                                 if (over) {  //my condition to stop
                                     endTimeGood = System.nanoTime();
-                                    Log.d("TimeCheck", "End and time in middle: " + (endTimeGood-startTimeGood)/timeFrames/1000000);
+                                    Log.d("TimeCheck", "End and time in middle: " + (middleTime)/timeFrames);
                                     //UI thread to display saving and change button status
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
                                             Toast.makeText(MainActivity.this, "Good: "+imageData.throughputCounter+"; " + (double)((endTimeGood - startTimeGood)/1000000), Toast.LENGTH_LONG).show();
-                                            Toast.makeText(MainActivity.this, "FrameTime: "+(endTimeGood-startTimeGood)/timeFrames/1000000, Toast.LENGTH_SHORT).show();
+                                            Toast.makeText(MainActivity.this, "FrameTime: "+middleTime/timeFrames, Toast.LENGTH_SHORT).show();
                                             Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
                                             btnCapture.setClickable(false);
                                             btnCapture.setBackgroundColor(Color.WHITE);
