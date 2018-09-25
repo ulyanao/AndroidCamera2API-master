@@ -633,7 +633,7 @@ public class MainActivity extends AppCompatActivity {
                 //Constants
                 int THRESH_STEP = 4;    //not too big to recognize small peeks
                 int DISTINGUISH_VALUE_THRESH = 20;
-                double DISTINGUISH_FACTOR_THRESH = 0.2;
+                double DISTINGUISH_FACTOR_THRESH = 0.3;
 
                 //Variables
                 int highestThresh = 0;
