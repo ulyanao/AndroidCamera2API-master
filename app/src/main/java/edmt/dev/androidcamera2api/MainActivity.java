@@ -544,7 +544,7 @@ public class MainActivity extends AppCompatActivity {
             int STEP_ROI_PIXEL = 8;         //min low is 8
             int DISTINGUISH_VALUE = 50;     //from 0 to 255
             int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
-            int RANGE_AROUND_MOST_STRIPES = 20;
+            int RANGE_AROUND_MOST_STRIPES = 50;
             int COUNT_OF_STRIPES = 12;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
 
             //<editor-fold desc="ROI Detection">
@@ -778,7 +778,7 @@ public class MainActivity extends AppCompatActivity {
                                 //Only if start bit called
                                 if(endHigh!=-1) {   //only do more if it was not the first high
                                     counterLow = startHigh-endHigh-1;   //set the zeros between start and end; -1 as want to get zeros in between and not the distance
-                                    if(1 <= counterLow && counterLow <= 8) {  //check if two start highs
+                                    if(1 <= counterLow && counterLow <= 9) {  //check if two start highs
                                         //start bit
                                         lastBit = 2;
                                         if(!sequenceFinished) {
@@ -787,7 +787,7 @@ public class MainActivity extends AppCompatActivity {
                                         }
                                         sequenceFinished=false;
                                     } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                        if(8 <= counterLow && counterLow <= 25){  //check if 0.2 in between to highs
+                                        if(10 <= counterLow && counterLow <= 26){  //check if 0.2 in between to highs
                                             //0,2
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 1
@@ -799,7 +799,7 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                                 Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                             }
-                                        } else if(26 <= counterLow && counterLow <= 45){  //check if 0.4 in between to highs
+                                        } else if(27 <= counterLow && counterLow <= 45){  //check if 0.4 in between to highs
                                             //0,4
                                             if(lastBit == 2 || lastBit == 0) {
                                                 //its a 0
