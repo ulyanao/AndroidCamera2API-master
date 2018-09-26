@@ -686,9 +686,9 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 5;    //not too big to recognize small peeks
-                int DISTINGUISH_VALUE_THRESH = 25;
-                double DISTINGUISH_FACTOR_THRESH = 0.3;
+                int THRESH_STEP = 1;    //not too big to recognize small peeks
+                int DISTINGUISH_VALUE_THRESH = 20;
+                double DISTINGUISH_FACTOR_THRESH = 0.2;
 
                 //Variables
                 int highestThresh = 0;
