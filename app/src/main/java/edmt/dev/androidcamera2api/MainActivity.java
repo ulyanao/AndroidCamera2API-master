@@ -884,7 +884,7 @@ public class MainActivity extends AppCompatActivity {
 
                     synchronized (imageData) {
                         if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
-                            for(int n=0;data4Bit[n]!=0 && data4Bit[n+1]!=0;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                            for(int n=0;data4Bit[n] > 0 && data4Bit[n+1]!=0 && data4Bit[n] <= 10;n+=2) {   //check if at least one byte of frame readable, than process this byte
                                 while(imageData.dataStream.size()<data4Bit[n]) {
                                     imageData.dataStream.add((byte) 0);
                                 }
