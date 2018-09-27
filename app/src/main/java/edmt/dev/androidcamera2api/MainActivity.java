@@ -896,10 +896,10 @@ public class MainActivity extends AppCompatActivity {
                                     imageData.dataStream.set(data4Bit[n]-1+imageData.counterErrorRate,data4Bit[n+1]);
                                     imageData.dataCheck+=data4Bit[n];
                                 }
-                                if(counterPut<3) {
+                                if(counterPut<102) {
                                     counterPut++;
                                 }
-                                if(counterPut==3) {
+                                if(counterPut==102) {
                                     counterPut++;
                                     throughPut = (System.nanoTime()-startTimePut)/1000000;
                                 }
