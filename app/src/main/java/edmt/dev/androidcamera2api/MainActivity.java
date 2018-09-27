@@ -190,6 +190,7 @@ public class MainActivity extends AppCompatActivity {
                         framesMiddleTime =0;
                         middleTime = 0;
                         counterPut = 0;
+                        imageData.counterErrorRate = 0;
                     }
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -482,6 +483,7 @@ public class MainActivity extends AppCompatActivity {
                 imageData.dataStream.clear();
                 imageData.lastFrameCaptured=false;
                 imageData.dataCheck = 0;
+                imageData.counterErrorRate = 0;
                 framesMiddleTime =0;
                 middleTime=0;
                 counterPut = 0;
@@ -504,10 +506,12 @@ public class MainActivity extends AppCompatActivity {
         public List<Byte> dataStream = new ArrayList<>();
         public boolean lastFrameCaptured;
         public int dataCheck;
+        public int counterErrorRate;
 
         ImageData() {
             lastFrameCaptured = false;
             dataCheck = 0;
+            counterErrorRate = 0;
         }
 
     }
@@ -884,22 +888,27 @@ public class MainActivity extends AppCompatActivity {
 
                     synchronized (imageData) {
                         if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
-                            for(int n=0;data4Bit[n] > 0 && data4Bit[n+1]!=0 && data4Bit[n] <= 10;n+=2) {   //check if at least one byte of frame readable, than process this byte
-                                while(imageData.dataStream.size()<data4Bit[n]) {
+                            for(int n=0;data4Bit[n] > 0 && data4Bit[n+1]!=0 && data4Bit[n] <= 3;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                                while(imageData.dataStream.size()<data4Bit[n] + imageData.counterErrorRate) {
                                     imageData.dataStream.add((byte) 0);
                                 }
-                                if(imageData.dataStream.get(data4Bit[n]-1) == 0) {
-                                    imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
+                                if(imageData.dataStream.get(data4Bit[n]-1+imageData.counterErrorRate) == 0) {
+                                    imageData.dataStream.set(data4Bit[n]-1+imageData.counterErrorRate,data4Bit[n+1]);
                                     imageData.dataCheck+=data4Bit[n];
                                 }
-                                if(counterPut<10) {
+                                if(counterPut<3) {
                                     counterPut++;
                                 }
-                                if(counterPut==10) {
+                                if(counterPut==3) {
                                     counterPut++;
                                     throughPut = (System.nanoTime()-startTimePut)/1000000;
                                 }
-                                if (imageData.dataCheck==55) {  //my condition to stop
+                                if(imageData.dataCheck == 6) {
+                                    imageData.dataCheck = 0;
+                                    imageData.counterErrorRate+=3;
+                                }
+
+                                if (imageData.counterErrorRate >= 100) {  //my condition to stop
                                     goodPut = (System.nanoTime()-startTimePut)/1000000;
                                     Log.d("TimeCheck", "End and time in middle: " + (middleTime)/ framesMiddleTime);
                                     //UI thread to display saving and change button status
