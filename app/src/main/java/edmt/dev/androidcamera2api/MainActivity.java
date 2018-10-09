@@ -158,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                 recordingData = !recordingData;     //first disable recording data to stop capturing frames
                 synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
                     if (!recordingData) {
-                        imageData.lastFrameCaptured = true;
+                        imageData.communicationFinishedCounter = imageData.COMMUNICATION_FINISHED_PARAMETER;
                     }
                 }
                 //Now distinguish between start and stopped
@@ -185,8 +185,7 @@ public class MainActivity extends AppCompatActivity {
                     synchronized (imageData) {  //if all done clear all saved stuff; thread save
                         imageData.dataTest.clear();
                         imageData.dataStream.clear();
-                        imageData.lastFrameCaptured=false;
-                        imageData.dataCheck = 0;
+                        imageData.communicationFinishedCounter = 0;
                         framesMiddleTime =0;
                         middleTime = 0;
                         counterPut = 0;
@@ -217,12 +216,16 @@ public class MainActivity extends AppCompatActivity {
             outputSurface.add(imageSurface);
             outputSurface.add(surface);
 
+            long expTime = 1000000000/8000;    //22000 to 100000000
+            int sensitivity = 10000;               //64 to 1600 //but higher somehow possible
+            long fps = 1000000000/30;
+
             //Set up the capture Builder with settings
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expTime);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,sensitivity);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fps);
 
             //Add target to Builder - both the texture field and the reader
             captureRequestBuilder.addTarget(surface);
@@ -340,7 +343,7 @@ public class MainActivity extends AppCompatActivity {
                         image.getPlanes()[0].getBuffer().get(data); //get data out of image
                         image.close();
                         try {
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableImage(data.clone()));   //start thread to proceed the data
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcesingData(data.clone()));   //start thread to proceed the data
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -480,8 +483,7 @@ public class MainActivity extends AppCompatActivity {
                 //Reset the data for next recording
                 imageData.dataTest.clear();
                 imageData.dataStream.clear();
-                imageData.lastFrameCaptured=false;
-                imageData.dataCheck = 0;
+                imageData.communicationFinishedCounter = 0;
                 framesMiddleTime =0;
                 middleTime=0;
                 counterPut = 0;
@@ -500,23 +502,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class ImageData {
-        public List<int[]> dataTest = new ArrayList<>();
-        public List<Byte> dataStream = new ArrayList<>();
-        public boolean lastFrameCaptured;
-        public int dataCheck;
+        public List<int[]> dataTest;
+        public List<Byte> dataStream;
+        public int communicationFinishedCounter;
+        public final int  MESSAGE_LENGTH;
+        public final int  COMMUNICATION_FINISHED_PARAMETER;
 
         ImageData() {
-            lastFrameCaptured = false;
-            dataCheck = 0;
+            dataTest = new ArrayList<>();
+            dataStream = new ArrayList<>();
+            communicationFinishedCounter = 0;
+            MESSAGE_LENGTH = 3;
+            COMMUNICATION_FINISHED_PARAMETER = 55;
         }
 
     }
 
-    private class RunnableImage implements Runnable {
+    private class RunnableProcesingData implements Runnable {
         //Initialization
         byte[] data;
 
-        RunnableImage(byte[] data) {
+        RunnableProcesingData(byte[] data) {
             this.data = data;
         }
 
@@ -529,87 +535,134 @@ public class MainActivity extends AppCompatActivity {
 
             //<editor-fold desc="ROI">
             //Variables
-            int upROI;     //data array starts top right corner and first columns than rows, ends left bottom
-            int lowROI = -1;    //0 is first position, 1 is second
-            int borderROIBuffer = -1;
-            int highestInRow = 0;
-            int lowestInRow = 250;
-            int byteToIntBuffer;
+            //The upper border of the ROI
+            int upperROIBorder;
+            //The lower border of the ROI, preset to -1 to check afterwards if it has been set
+            int lowerROIBorder = -1;
+            //Saves temporarily the current line
+            int currentLine = -1;
+            //The highest value of a pixel
+            int highestLightIntensity = 0;
+            //The lowest value of a pixel
+            int lowestLightIntensity = 250;
+            //Saves temporarily the value of the current pixel
+            int currentLightIntensity;
+            //Counter to check if an interval is over
             int counterInterval = 0;
-            int counterStripes = 0;
-            int counterStripesHighest = 0;
-            int mostStripes = 0;
+            //Counter which counts consecutive stripes
+            int counterConsecutiveStripes = 0;
+            //Counter which saves the highest number of consecutive stripes
+            int consecutiveStripesHighestRow = 0;
+            //Saves the highest occurrence of consecutive stripes of all rows
+            int consecutiveStripesHighestAll = 0;
+
             //Constants
+            //The step size for the rows
             int STEP_ROI_ROW = 25;
-            int STEP_ROI_PIXEL = 8;         //min low is 8
-            int DISTINGUISH_VALUE = 50;     //from 0 to 255
-            int INTERVAL_OF_STRIPES = 65;   //in pixels, 70 as longest time without change is 0.6 low with around these pixels
+            //The step size for the pixels in a row or respectively the columns
+            int STEP_ROI_PIXEL = 8;
+            //The to exceeding difference to count a difference in the light intensity as a stripe
+            int DISTINGUISH_VALUE = 50;
+            //The length of the maximum interval possible without a stripe
+            int INTERVAL_OF_STRIPES = 65;
+            //The number of lines we consider around the line with the most consecutive stripes
             int RANGE_AROUND_MOST_STRIPES = 20;
-            int COUNT_OF_STRIPES = 8;  //depends on bits per sequence, at least a sequence per row; COUNT_OF_STRIPES dark/bright stripes per row
+            //The minimum number of consecutive stripes to process further with the data
+            int MINIMUM_CONSECUTIVE_STRIPES = 8;
 
             //<editor-fold desc="ROI Detection">
-            //Loops
-            for(int i=0; i<width; i=i+STEP_ROI_ROW) {   //A column
-                //i is offset of Row
-                for(int n=0;n<height; n=n+STEP_ROI_PIXEL) { //A line
-                    // n*width + i is pixel
-                    byteToIntBuffer = (dataPlanes[i+n*width] & 0xff);
+            //First loop to change the row;
+            for(int counterRow=0; counterRow<width; counterRow=counterRow+STEP_ROI_ROW) {
+                //Second loop to change the pixel per row or rather the column
+                for(int counterPixel=0;counterPixel<height; counterPixel=counterPixel+STEP_ROI_PIXEL) {
+                    //Save the current value in a buffer; counterRow+counterPixel*width represents the position in the array
+                    currentLightIntensity = (dataPlanes[counterRow+counterPixel*width] & 0xff);
+                    //Increment the interval counter
                     counterInterval++;
-                    if(byteToIntBuffer>highestInRow) {
-                        highestInRow = byteToIntBuffer;
+                    //Check if the current value is higher than the previous highest
+                    if(currentLightIntensity>highestLightIntensity) {
+                        //Save the new highest value
+                        highestLightIntensity = currentLightIntensity;
                     }
-                    if(byteToIntBuffer<lowestInRow) {
-                        lowestInRow = byteToIntBuffer;
+                    //Check if the current value is lower than the previous lowest
+                    if(currentLightIntensity<lowestLightIntensity) {
+                        //Save the new lowest value
+                        lowestLightIntensity = currentLightIntensity;
                     }
-                    if(highestInRow-lowestInRow > DISTINGUISH_VALUE) {  //Check if bright an dark stripes can be distinguished
-                        borderROIBuffer = i+n*width;
-                        counterStripes++;       //counter++ stripes
+                    //Check if the difference between the highest and the lowest value is exceeding the threshold
+                    if(highestLightIntensity-lowestLightIntensity > DISTINGUISH_VALUE) {
+                        //A stripe is detected
+                        //Save the position of the line in the buffer; (counterRow+counterPixel*width)%width represents the line in the array
+                        currentLine = (counterRow+counterPixel*width)%width;
+                        //Increment the stripes counter
+                        counterConsecutiveStripes++;
 
-                        //Reset interval values to start new interval
-                        highestInRow = 0;
-                        lowestInRow = 250;
+                        //Reset the highest value
+                        highestLightIntensity = 0;
+                        //Reset the lowest value
+                        lowestLightIntensity = 250;
+                        //Reset the interval counter to start a new interval
                         counterInterval = 0;
                     }
-                    //Check the interval
-                    if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {   //Check if interval ended
-                        if(counterStripesHighest<counterStripes) {
-                            counterStripesHighest=counterStripes;
+                    //Check if no stripe has been detected within one interval
+                    if(counterInterval>=INTERVAL_OF_STRIPES/STEP_ROI_PIXEL) {
+                        //A row of consecutive stripes has ended or multiply intervals with no stripe at all
+                        //Check if the counted consecutive stripes are more than the highest count of consecutive stripes in this row
+                        if(consecutiveStripesHighestRow<counterConsecutiveStripes) {
+                            //Save the the count of most consecutive stripes in this row
+                            consecutiveStripesHighestRow=counterConsecutiveStripes;
                         }
-                        //Reset interval values if ended
-                        counterStripes = 0;
-                        highestInRow = 0;
-                        lowestInRow = 250;
+
+                        //Reset the counted consecutive stripes
+                        counterConsecutiveStripes = 0;
+                        //Reset the highest value
+                        highestLightIntensity = 0;
+                        //Reset the lowest value
+                        lowestLightIntensity = 250;
+                        //Reset the interval counter to start a new interval
                         counterInterval = 0;
                     }
                 }
-                //Stuff before next Row starts
-                if (mostStripes<counterStripesHighest) { //check if most stripes in this line
-                    mostStripes=counterStripesHighest;
-                    //Set the left and low ROI Border
-                    lowROI = borderROIBuffer%width;
+                //One row has been processed
+                //Check if the highest count of consecutive stripes in this row is more than the highest count of consecutive stripes in all rows
+                if (consecutiveStripesHighestAll<consecutiveStripesHighestRow) {
+                    //Save the new count as the highest
+                    consecutiveStripesHighestAll=consecutiveStripesHighestRow;
+                    //Save the position of this line with the most consecutive stripes as the origin
+                    lowerROIBorder = currentLine;
                 }
-                //Reset highest and lowest and reset row
-                highestInRow = 0;
-                lowestInRow = 250;
+                //Reset highest value
+                highestLightIntensity = 0;
+                //Reset the lowest value
+                lowestLightIntensity = 250;
+                //Reset the interval counter
                 counterInterval = 0;
-                counterStripes = 0;
+                //Reset the counted consecutive stripes
+                counterConsecutiveStripes = 0;
             }
-            //Set Borders
-            lowROI+=RANGE_AROUND_MOST_STRIPES/2;
-            upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
-            if(upROI<0) {
-                upROI=0;
-                lowROI=RANGE_AROUND_MOST_STRIPES;
+
+            //The highest and lowest row are set as the borders of the ROI
+            //The lowest border is set according to the number of lines we consider around the origin line
+            lowerROIBorder+=RANGE_AROUND_MOST_STRIPES/2;
+            //The upper border is set
+            upperROIBorder = lowerROIBorder-RANGE_AROUND_MOST_STRIPES;
+            //Check if the upper border is within the range of the array
+            if(upperROIBorder<0) {
+                //Change the values to be within the range of the array
+                upperROIBorder=0;
+                lowerROIBorder=RANGE_AROUND_MOST_STRIPES;
             }
-            if(lowROI>=width) {
-                lowROI=width-1;
-                upROI = lowROI-RANGE_AROUND_MOST_STRIPES;
+            //Check if the lower border is within the range of the array
+            if(lowerROIBorder>=width) {
+                //Change the values to be within the range of the array
+                lowerROIBorder=width-1;
+                upperROIBorder = lowerROIBorder-RANGE_AROUND_MOST_STRIPES;
             }
             //</editor-fold>
             //</editor-fold>
 
             //Check if ROI found otherwise discard frame
-            if(mostStripes>=COUNT_OF_STRIPES) {
+            if(consecutiveStripesHighestAll>=MINIMUM_CONSECUTIVE_STRIPES) {
                 //New dimensions of array
 
                 //<editor-fold desc="1 dim array">
@@ -625,7 +678,7 @@ public class MainActivity extends AppCompatActivity {
 
                 //two loops to get only needed lines and columns
                 for(int i=0; i<height; i++) {
-                    for(int n=upROI; n<lowROI; n=n+STEP_1DIM_ROW) {
+                    for(int n=upperROIBorder; n<lowerROIBorder; n=n+STEP_1DIM_ROW) {
                         sumOfLine += (dataPlanes[i*width+n] & 0xff);    //save byte data as int and sum up and create mean
                         counterSamples++;
                     }
@@ -639,66 +692,100 @@ public class MainActivity extends AppCompatActivity {
 
                 //<editor-fold desc="Thresholding">
                 //Constants
-                int THRESH_STEP = 4;    //not too big to recognize small peeks
+                //The step size
+                int STEP_THRESH = 4;
+                //The distinguishing value
                 int DISTINGUISH_VALUE_THRESH = 20;
+                //The factor to automatically adjust the distinguishing value according to the last high
                 double DISTINGUISH_FACTOR_THRESH = 0.3;
 
                 //Variables
-                int highestThresh = 0;
-                int lowestThresh = 250;
-                int lowestThreshPosition = 0;
-                int lowestThreshOld = -1;
-                int currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
-                int currentData;
-                boolean goesUp = true;
-                ArrayList<Integer> threshValues = new ArrayList<>();    //where the new borders and thresh values of thresh's are saved
+                //To save the temporarily highest value
+                int highestValue = 0;
+                //To save the temporarily lowest value
+                int lowestValue = 250;
+                //To save the position of the temporarily lowest value
+                int lowestValuePosition = 0;
+                //To save the value of the previous temporarily lowest value
+                int lowestValueOld = -1;
+                //The current distinguish value
+                int currentDistinguishValue = DISTINGUISH_VALUE_THRESH;
+                //A buffer for the current value
+                int currentValue;
+                //A boolean to differentiate between the two search procedures
+                boolean searchHigh = true;
+                //The final list, where the thresholds and the interval positions of the thresholds are saved
+                ArrayList<Integer> threshValues = new ArrayList<>();
 
-                for(int i=0; i<height;i+=THRESH_STEP) {  //loop of data 1 dim
-                    currentData = data1Dim[i];  //buffer of current data
-                    if(goesUp) {    //if goes Up is true, search for a increase of specific amount to recognize a peek
-                        if(currentData<lowestThresh) {  //get lowest
-                            lowestThresh=currentData;
-                            lowestThreshPosition = i;
+                //The loop to access the entries of the data array
+                for(int currentPosition=0; currentPosition<height;currentPosition+=STEP_THRESH) {
+                    //Save the current value in a buffer
+                    currentValue = data1Dim[currentPosition];
+                    //Check which search procedure is active - searching for a high or a low
+                    if(searchHigh) {
+                        //We search for an increase / a high
+                        //Check if current value lower than lowest
+                        if(currentValue<lowestValue) {
+                            //Save the current value as the lowest
+                            lowestValue=currentValue;
+                            //Save the position of the lowest value
+                            lowestValuePosition = currentPosition;
                         }
-                        if(currentData>lowestThresh+currentDistinguishThresh) { //look for increase
-                            if(lowestThreshOld!=-1) {   //only do if it was at least second increase
-                                //now do everything to save the high
-                                //save mean and borders of thresholding with the highest and lowest
-                                if(lowestThresh>lowestThreshOld) {  //take higher low value, as normally better
-                                    threshValues.add((lowestThresh+highestThresh)/2);
+                        //Check if we have an increase according to the current distinguish value
+                        if(currentValue>lowestValue+currentDistinguishValue) {
+                            //A high is detected
+                            //Check if it is not the first high
+                            if(lowestValueOld!=-1) {
+                                //It is not the first high and we can save a threshold and the corresponding position
+                                //Check if the low before or after the high is higher - use the higher low
+                                if(lowestValue>lowestValueOld) {
+                                    //Save the threshold according to the mean of the highest and the lowest value after the high
+                                    threshValues.add((lowestValue+highestValue)/2);
                                 }else {
-                                    threshValues.add((lowestThreshOld+highestThresh)/2);
+                                    //Save the threshold according to the mean of the highest and the lowest value before the high
+                                    threshValues.add((lowestValueOld+highestValue)/2);
                                 }
-                                threshValues.add(lowestThreshPosition);
+                                //Save the position or rather the border of the interval with this high and the corresponding threshold
+                                threshValues.add(lowestValuePosition);
 
-                                //set the distinguish value according to the current last peek to low value
-                                currentDistinguishThresh= (int) ((highestThresh-lowestThresh)* DISTINGUISH_FACTOR_THRESH);
-                                if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
-                                    currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
+                                //Set the new distinguish value according to the height of the last rising edge
+                                currentDistinguishValue = (int) ((highestValue-lowestValue)* DISTINGUISH_FACTOR_THRESH);
+                                //Check that if the minimum is complied
+                                if(currentDistinguishValue<DISTINGUISH_VALUE_THRESH) {
+                                    currentDistinguishValue = DISTINGUISH_VALUE_THRESH;
                                 }
-
                             }
-                            goesUp = false;
-                            lowestThreshOld = lowestThresh;
-                            lowestThresh=250;
-                            highestThresh=0;
+                            //Change the active search procedure
+                            searchHigh = false;
+                            //Save the current lowest value as the old one
+                            lowestValueOld = lowestValue;
+                            //Reset the highest and lowest value
+                            lowestValue=250;
+                            highestValue=0;
                         }
-                    } else {    //if goes down, looking for a low
-                        if(currentData>highestThresh) { //save highest
-                            highestThresh = currentData;
+                    } else {
+                        //We search for a decrease / a low
+                        //Check if the current value is higher than the previously highest
+                        if(currentValue>highestValue) {
+                            //Save the current as the highest
+                            highestValue = currentValue;
                         }
-                        if(currentData<highestThresh-currentDistinguishThresh) {    //look if decrease is recognized
-                            goesUp = true;
-                            currentDistinguishThresh= (int) ((highestThresh-lowestThreshOld)* DISTINGUISH_FACTOR_THRESH);   //set new distinguish value
-                            if(currentDistinguishThresh<DISTINGUISH_VALUE_THRESH) {
-                                currentDistinguishThresh = DISTINGUISH_VALUE_THRESH;
+                        //Check if we have a decrease according to the current thresh value
+                        if(currentValue<highestValue-currentDistinguishValue) {
+                            //change the active search procedure
+                            searchHigh = true;
+                            //Set the new distinguish value according to the height of the last falling edge
+                            currentDistinguishValue= (int) ((highestValue-lowestValueOld)* DISTINGUISH_FACTOR_THRESH);
+                            //Comply with the minimum
+                            if(currentDistinguishValue<DISTINGUISH_VALUE_THRESH) {
+                                currentDistinguishValue = DISTINGUISH_VALUE_THRESH;
                             }
                         }
                     }
                 }
                 //</editor-fold>
 
-                if (threshValues.size()>=COUNT_OF_STRIPES) {
+                if (threshValues.size()>=MINIMUM_CONSECUTIVE_STRIPES) {
                     //Beta; will be implemented in decoding for faster processing
                     //<editor-fold desc="Downsampling">
                     //Variables
@@ -726,171 +813,265 @@ public class MainActivity extends AppCompatActivity {
 
                     //<editor-fold desc="Decoding algorithm">
                     //Variables
-                    byte data6Bit = 0;         //The encoded data in 6bit
-                    byte[] data4Bit = new byte[12];         //the byte array where to save the 4 bit data bytes decoded form the 6 bit data; 1 block number 1 byte repeated
-                    byte dataByteBuffer;        //buffer
-                    int bytePart = 0;           //checks if already first 6bit captured of the 12
-                    int counterBytes = 0;      //counts the bytes
-                    int counterBits = 0;       //counter of captured bits
-                    int counterHigh=0;        //counts how many highs in a row
-                    int endHigh = -1;         //saves end pixel of a high
-                    int startHigh;            //saves start pixel of a high
-                    int counterLow;
-                    int lastBit = -1;          //-1 nothing, 0 zero last, 1 one last, 2 start bit
+                    //Buffer to save the current encoded data
+                    byte encodedData = 0;
+                    //Array, where all the decoded data is saved; one pair per block: block number, data
+                    byte[] decodedDataFrame = new byte[12];
+                    //buffer
+                    byte byteBuffer;
+                    //Tracks the block part; there are three parts, since three times six chips in one block
+                    int blockPart = 0;
+                    //The current position in the final decodedData array
+                    int positionDecodedData = 0;
+                    //The bit position in the current encoded data buffer
+                    int positionEncodedData = 0;
+                    //Counts the series of ones or is respectively the length of a high
+                    int counterHigh=0;
+                    //The end position of a high
+                    int endHigh = -1;
+                    //The start position of a high
+                    int startHigh;
+                    //The length of a low
+                    int lengthLow;
+                    //Saves the value of the last decoded bit; -1 nothing, 0 zero, 1 one, 2 start bit
+                    int lastBit = -1;
+                    //Is set if an error occurs
                     boolean error = false;
+                    //Is set if a start bit is detected but last block not finished
                     boolean startError = false;
-                    boolean sequenceFinished = true;
-
+                    //Is set if a block is finished
+                    boolean blockFinished = true;
                     //<editor-fold desc="Algorithm">
 
-                    for (int i = 0; i<height; i++) {
+                    for (int position = 0; position<height; position++) {
+                        //check if an error occurred
                         if(error) {
-                            error = false;  //reset error flag
-                            data6Bit = 0;    //the current buffered data is reset
-                            data4Bit[counterBytes] = 0; //the already saved data at this position is reset
-                            if(bytePart!=0) {   //if first part of data has already been saved so not part 0 anymore
-                                data4Bit[counterBytes-1] = 0;   //than reset las data
-                                counterBytes--; //and change counter again
+                            //Reset the variables to start new
+                            error = false;  //Reset error flag
+                            encodedData = 0;    //Reset current buffered data
+                            decodedDataFrame[positionDecodedData] = 0; //Reset the data at current position in array
+                            //Check if second part of the block is active
+                            if(blockPart!=0) {
+                                //Reset the corresponding data in the first part of the block
+                                decodedDataFrame[positionDecodedData-1] = 0;
+                                //Change position to start new
+                                positionDecodedData--;
                             }
-                            bytePart = 0;   //set part to zero again
-                            counterBits = 0;    //counter of captured bits is reset
-                            lastBit = -1;   //the last bit is not available any longer
+                            //Start with first block part again
+                            blockPart = 0;
+                            //Reset the counter for the decoded bits
+                            positionEncodedData = 0;
+                            //Reset the last captured bit
+                            lastBit = -1;
+                            //Check if error with start bit
                             if(startError) {
-                                lastBit=2;  //if start high too early, process with this further
+                                //Start bit can be set to progress with this further
+                                lastBit=2;
+                                //Reset the flag
                                 startError = false;
                             }
-
                         }
 
-                        if(data1Dim[i]>=1) {   //high point recognized
+                        //Check if a one / a high point
+                        if(data1Dim[position]>=1) {
+                            //Increment counter
                             counterHigh++;
-                        } else if(counterHigh != 0) {   //two times low after some highs
-                            if(30<=counterHigh && counterHigh<=50) {    //check if high was startBit without low parts
+
+                        //Check if a sequence of ones has ended
+                        } else if(counterHigh != 0) {
+                            //Check if it is a long high, respectively a start bit
+                            if(30<=counterHigh && counterHigh<=50) {
+                                //set the last bit and the position
                                 lastBit = 2;
-                                endHigh = i - 1;
-                                if(!sequenceFinished) {
+                                endHigh = position - 1;
+                                //Check if it is an error, since a new start bit is detected too early
+                                if(!blockFinished) {
+                                    //Set the error flag
                                     error = true;
+                                    //Set the flag to not discard the detected start bit
                                     startError = true;
                                 }
-                                sequenceFinished=false;
-                            } else if(8<=counterHigh && counterHigh<=29) { //check if it was a normal high
-                                startHigh = i - counterHigh;  //set new start of this normal high
-                                //Only if start bit called
-                                if(endHigh!=-1) {   //only do more if it was not the first high
-                                    counterLow = startHigh-endHigh-1;   //set the zeros between start and end; -1 as want to get zeros in between and not the distance
-                                    if(1 <= counterLow && counterLow <= 8) {  //check if two start highs
+                                //Set flag that a new block has started
+                                blockFinished=false;
+
+                            //Check if it is a normal high
+                            } else if(8<=counterHigh && counterHigh<=29) {
+                                //Set the start of the high
+                                startHigh = position - counterHigh;
+                                //Only process further if the end position of the last high is available - so it is not the first high and no error before
+                                if(endHigh!=-1) {
+                                    //Calculate the number of zeros (the length of the low) in between the last highs
+                                    lengthLow = startHigh-endHigh-1;
+
+                                    //Check the different length:
+                                    //Check if it is a start bit
+                                    if(1 <= lengthLow && lengthLow <= 8) {
                                         //start bit
                                         lastBit = 2;
-                                        if(!sequenceFinished) {
+                                        //Check if it is an error, since a new start bit is detected too early
+                                        if(!blockFinished) {
+                                            //Set the error flag
                                             error = true;
+                                            //Set the flag to not discard the detected start bit
                                             startError = true;
                                         }
-                                        sequenceFinished=false;
-                                    } else if (lastBit!=-1) {                               //Check if start bit called ones
-                                        if(8 <= counterLow && counterLow <= 23){  //check if 0.2 in between to highs
-                                            //0,2
+                                        //Set flag that a new block has started
+                                        blockFinished=false;
+
+                                    //Only check the other lows if last bit is available
+                                    } else if (lastBit!=-1) {
+                                        //Check if it is a 0.2 ms low
+                                        if(8 <= lengthLow && lengthLow <= 23){
+                                            //Differentiate according to the last bit
                                             if(lastBit == 2 || lastBit == 0) {
-                                                //its a 1
-                                                data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
-                                                counterBits++;
+                                                //The new bit has the value 1
+                                                //Save the bit in the temporary buffer
+                                                encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                //Increment position in buffer
+                                                positionEncodedData++;
+                                                //Set the current bit as last bit
                                                 lastBit = 1;
                                             } else {
-                                                //error not possible to have this bit followed by this lows
+                                                //Error, other last bits not possible
                                                 error = true;
-                                                Log.d("DataTest", "Error last Bit at 0.2; and at pixel: "+i);
                                             }
-                                        } else if(24 <= counterLow && counterLow <= 42){  //check if 0.4 in between to highs
-                                            //0,4
+
+                                        //Check if it is a 0.4 ms low
+                                        } else if(24 <= lengthLow && lengthLow <= 42){
+                                            //Differentiate according to the last bit
                                             if(lastBit == 2 || lastBit == 0) {
-                                                //its a 0
-                                                counterBits++;
+                                                //The new bit has the value 0
+                                                //Do not have to write to buffer, since buffer is initialized with 0
+                                                //Only increment position in buffer
+                                                positionEncodedData++;
+                                                //Set the current bit as last bit
                                                 lastBit = 0;
                                             } else {
-                                                //its a 1
-                                                data6Bit = (byte) ((1 << (5-counterBits) | data6Bit));
-                                                counterBits++;
+                                                //The new bit has the value 1
+                                                //Save the bit in the temporary buffer
+                                                encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                //Increment position in buffer
+                                                positionEncodedData++;
+                                                //Set the current bit as last bit
                                                 lastBit = 1;
                                             }
-                                        } else if(43 <= counterLow && counterLow <= 62){  //check if 0.6 in between to highs
-                                            //0,6
+
+                                        //Check if it is a 0.6 ms low
+                                        } else if(43 <= lengthLow && lengthLow <= 62){
+                                            //Differentiate according to the last bit
                                             if(lastBit == 1) {
-                                                //its a 0
-                                                counterBits++;
+                                                //The new bit has the value 0
+                                                //Do not have to write to buffer, since buffer is initialized with 0
+                                                //Only increment position in buffer
+                                                positionEncodedData++;
+                                                //Set the current bit as last bit
                                                 lastBit = 0;
                                             } else {
-                                                //error
-                                                Log.d("DataTest", "Error last Bit at 0.6; and at pixel: "+i);
+                                                //Error, other last bits not possible
                                                 error = true;
                                             }
-                                        } else {    //some else number of lows in between two highs => sequence is interrupted
+
+                                        //The length of the low is not mapped
+                                        } else {
                                             // error
-                                            Log.d("DataTest", "Error strange number of lows; and at pixel: "+i);
                                             error = true;
                                         }
 
-                                        if(counterBits==6 && bytePart==0) {    //first 6 bit to 4bit
-                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                                data4Bit[counterBytes] = dataByteBuffer;
-                                                counterBits = 0;    //reset the counter of how many bits
-                                                data6Bit = 0;    //reset the data buffer
-                                                bytePart = 1;           //set to new part
-                                                counterBytes++; //set counterBytes higher...
+                                        //Every time a high is proceeded, check if a part of the block is finished:
+                                        //Check if temporary buffer is filled with 6 chips and it is the first block part
+                                        if(positionEncodedData==6 && blockPart==0) {
+                                            //Decode the 6 chips - result 4 bits, which represent the block number
+                                            if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
+                                                //Save the 4 bits (block number) in the final data array
+                                                decodedDataFrame[positionDecodedData] = byteBuffer;
+                                                //Reset the position in the encoded data buffer
+                                                positionEncodedData = 0;
+                                                //Reset the temporary encoded data buffer
+                                                encodedData = 0;
+                                                //Increment block part
+                                                blockPart = 1;
+                                                //Increment the position in the final data array
+                                                positionDecodedData++;
                                             } else {
+                                                //Error, not possible bit sequence
                                                 error = true;
                                             }
-                                        } else if(counterBits==6 && bytePart == 1) {    //first 6 bit to 4bit
-                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                                data4Bit[counterBytes] = (byte) (dataByteBuffer << 4);
-                                                counterBits = 0;
-                                                data6Bit = 0;
-                                                bytePart = 2;
+
+                                        //Check if temporary buffer is filled with 6 chips and it is the second block part
+                                        } else if(positionEncodedData==6 && blockPart == 1) {
+                                            //Decode the 6 chips - result 4 bits, which represent the first 4 bit of the data byte
+                                            if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
+                                                //Save the first 4 bit of the final data byte in the final data array
+                                                //Do not increment position in final data array, since the other 4 bit are added later
+                                                decodedDataFrame[positionDecodedData] = (byte) (byteBuffer << 4);
+                                                //Reset the position in the encoded data buffer
+                                                positionEncodedData = 0;
+                                                //Reset the temporary encoded data buffer
+                                                encodedData = 0;
+                                                //Increment block part
+                                                blockPart = 2;
                                             } else {
+                                                //Error, not possible bit sequence
                                                 error = true;
                                             }
-                                        } else if(counterBits == 6) { //last 6 bit to last 4 bit
-                                            if ((dataByteBuffer = decode4Bit6Bit(data6Bit)) != -1) {
-                                                data4Bit[counterBytes] = (byte) (dataByteBuffer | data4Bit[counterBytes]);
-                                                counterBytes++; //to get new bytes of data
-                                                bytePart = 0; //to care about the if case in the error handling
-                                                sequenceFinished = true;
+
+                                        //Check if temporary buffer is filled with 6 chips and it is the last block part
+                                        } else if(positionEncodedData == 6) {
+                                            //Decode the 6 chips - result 4 bits, which represent the other 4 bit of the data byte
+                                            if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
+                                                //Save the other 4 bit of the final data byte in the final data array
+                                                decodedDataFrame[positionDecodedData] = (byte) (byteBuffer | decodedDataFrame[positionDecodedData]);
+                                                //Increment the position in the final data array
+                                                positionDecodedData++;
+                                                //Set the block part to 0 again to start with a new block
+                                                blockPart = 0;
+                                                //Set the flag, that a block is finished
+                                                blockFinished = true;
                                             }
-                                            //reset to capture new byte resp. error if = -1
+                                            //This time the error flag is set regardless of the result
+                                            //1. If the decoded bit sequence is not possible, we have an error
+                                            //2. If the block is finished, the flags and buffers are reset in the error handling to be ready for a new block - the finished block is not lost
                                             error = true;
                                         }
                                     }
                                 }
-                                endHigh = i - 1;  // a normal high and was processed and now set the end
-                            } else if(counterHigh>=13){
-                                //1. error as sequence is interrupted - too many high values
-                                Log.d("DataTest", "Error to many high; highs: "+counterHigh+"; and at pixel: "+i);
+                                //The high has been processed
+                                //Save the end position of the high
+                                endHigh = position - 1;
+                            } else if(counterHigh>=50){
+                                //The high is too long
+                                //Set error flag
                                 error = true;
-                                endHigh = -1;   //not a normal high so set back last high value
+                                //Do not consider this high for next processing steps
+                                endHigh = -1;
                             }
-                            //2. just some strange highs (small ones maybe only) in between highs does not matter
-
-                            //after end of high processed go to 0 again
+                            //We do not consider a high that is too short, it is discarded and does not interfere
+                            //The counter for the highs is set to 0 again
                             counterHigh = 0;
                         }
-                        //if no high has been - nothing happens in loop and go further in data
                     }
-                    if(bytePart==2) {           //Check if sequence ended, but block byte and first part of byte are already written
-                        //I have to discard both as not completed
-                        data4Bit[counterBytes] = 0;
-                        data4Bit[counterBytes-1] = 0;
+
+                    //The algorithm has ended
+                    //Check if data is uncompleted
+                    //If the first part of a block is already saved but not finished, discard both
+                    if(blockPart==2) {
+                        //Both current parts are discarded, since not completed
+                        decodedDataFrame[positionDecodedData] = 0;
+                        decodedDataFrame[positionDecodedData-1] = 0;
                     }
                     //</editor-fold>
 
                     //</editor-fold>
 
                     synchronized (imageData) {
-                        if (!imageData.lastFrameCaptured) { //stops still executing threads from interacting during proceeding the final message
-                            for(int n=0;data4Bit[n] > 0 && data4Bit[n+1]!=0 && data4Bit[n] <= 10;n+=2) {   //check if at least one byte of frame readable, than process this byte
-                                while(imageData.dataStream.size()<data4Bit[n]) {
+                        if (imageData.communicationFinishedCounter != imageData.COMMUNICATION_FINISHED_PARAMETER) { //stops still executing threads from interacting during proceeding the final message
+                            for(int n=0;decodedDataFrame[n] > 0 && decodedDataFrame[n+1]!=0 && decodedDataFrame[n] <= imageData.MESSAGE_LENGTH;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                                while(imageData.dataStream.size()<decodedDataFrame[n]) {
                                     imageData.dataStream.add((byte) 0);
                                 }
-                                if(imageData.dataStream.get(data4Bit[n]-1) == 0) {
-                                    imageData.dataStream.set(data4Bit[n]-1,data4Bit[n+1]);
-                                    imageData.dataCheck+=data4Bit[n];
+                                if(imageData.dataStream.get(decodedDataFrame[n]-1) == 0) {
+                                    imageData.dataStream.set(decodedDataFrame[n]-1,decodedDataFrame[n+1]);
+                                    imageData.communicationFinishedCounter +=decodedDataFrame[n];
                                 }
                                 if(counterPut<10) {
                                     counterPut++;
@@ -899,7 +1080,7 @@ public class MainActivity extends AppCompatActivity {
                                     counterPut++;
                                     throughPut = (System.nanoTime()-startTimePut)/1000000;
                                 }
-                                if (imageData.dataCheck==55) {  //my condition to stop
+                                if (imageData.communicationFinishedCounter == imageData.COMMUNICATION_FINISHED_PARAMETER) {  //my condition to stop
                                     goodPut = (System.nanoTime()-startTimePut)/1000000;
                                     Log.d("TimeCheck", "End and time in middle: " + (middleTime)/ framesMiddleTime);
                                     //UI thread to display saving and change button status
@@ -913,7 +1094,6 @@ public class MainActivity extends AppCompatActivity {
                                     });
                                     //Now cancel processing new frames and set last frame captured
                                     recordingData = false;  //stop recording in image reader
-                                    imageData.lastFrameCaptured = true; //stop still executing threads from writing more data
                                     //For debugging
                                     imageData.dataTest.add(data1Dim);  //add data to be saved
 
