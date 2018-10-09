@@ -79,10 +79,10 @@ public class MainActivity extends AppCompatActivity {
 
     //Manual camera settings
     private Long expUpper;
-    private Long expLower;
-    private Integer senUpper;
+    private Long exposureTime;
+    private Integer sensitivity;
     private Integer senLower;
-    private Long fraUpper;
+    private Long fps;
     private Long fraLower;
 
     //Intent
@@ -210,9 +210,9 @@ public class MainActivity extends AppCompatActivity {
             //Set up the capture Builder with settings
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expLower);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,senUpper);
-            captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fraUpper);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensitivity);
+            captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION, fps);
 
             //Add target to Builder - both the texture field and the reader
             captureRequestBuilder.addTarget(surface);
@@ -351,16 +351,16 @@ public class MainActivity extends AppCompatActivity {
             /*
             Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
             expUpper = (Long) expRange.getUpper();
-            expLower = (Long) expRange.getLower();
+            exposureTime = (Long) expRange.getLower();
 
             Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
-            senUpper = (Integer) senRange.getUpper();
+            sensitivity = (Integer) senRange.getUpper();
             senLower = (Integer) senRange.getLower();
             */
 
-            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
-            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
-            fraUpper = (Long) (long) 1000000000/30;
+            exposureTime = (Long) (long) (1000000000/8000);    //22000 to 100000000
+            sensitivity = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
+            fps = (Long) (long) 1000000000/30;
 
 
             createCameraPreview();
@@ -436,84 +436,103 @@ public class MainActivity extends AppCompatActivity {
 
             //Now get all the data out of imageData
             synchronized (imageData) {  //be thread save, double secure
+
+
+                //I display this code:
                 try {
+                    //The data with the mean values of every column
+                    int[] dataMean = imageData.dataTest.get(0);
+                    //The binary data after the downsampling step
+                    int[] dataBinary = imageData.dataTest.get(1);
 
-                    int[] data1DimTest = imageData.dataTest.get(0);
-                    int[] data1Dim = imageData.dataTest.get(1);
-
-
-                    //set up the file path
-                    File file01 = new File(Environment.getExternalStorageDirectory()+"/yuv/E"+expLower+"_S"+senUpper+"_U"+imageData.dataTest.get(2)[0]+"_D"+imageData.dataTest.get(2)[1]+"_R"+imageData.dataTest.get(2)[2]+"_L"+imageData.dataTest.get(2)[3]+".csv");
-                    //Stream of text file
-                    FileWriter fileWriter01 = null;
+                    //Set up a storage path for the final spread sheet, include the exposure time and the sensitivity in file name
+                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/Exp_" + exposureTime + "_Sens_" + sensitivity + ".csv");
+                    //Set up a file writer
+                    FileWriter fileWriter = null;
                     try{
-                        fileWriter01 = new FileWriter(file01);
+                        //Initialize the file writer
+                        fileWriter = new FileWriter(file);
 
-
-
+                        //Algorithm to save the distribution of the length of sequences of zeros and ones:
+                        //Variables
+                        //Array to save the distribution of the length of sequences of zeros
                         int[] zeros = new int[100];
+                        //Array to save the distribution of the length of sequences of zeros
                         int[] ones = new int[100];
+                        //Counter to count the consecutive high values
+                        int counterHigh=0;
+                        //The position of the end of a high
+                        int endHigh = -1;
+                        //The position of the start of a high
+                        int startHigh;
 
-                        boolean lastHigh = false;   //cares about possible that one low and high again to stay in a row
-                        int counterHigh=0;        //counts how many highs in a row
-                        int endHigh = -1;         //saves end pixel of a high
-                        int startHigh;            //saves start pixel of a high
-
-
-
-
-                        //<editor-fold desc="Algorithm">
-
-                        for (int i = 0; i<imageData.dataTest.get(0).length; i++) {
-                            if(data1Dim[i]>=1) {   //high point recognized
+                        for (int position = 0; position<dataBinary.length; position++) {
+                            //Check if the value is high
+                            if(dataBinary[position]>=1) {
+                                //Increment the counter for the high values
                                 counterHigh++;
-                            } else if(counterHigh != 0) {   //two times low after some highs
+
+                            //Check if sequence of highs has ended
+                            } else if(counterHigh != 0) {
+                                //Only count a high with a length between 8 and 100
                                 if(8<=counterHigh && counterHigh<=100) {
+                                    //Increment the corresponding entry
                                     ones[counterHigh-1]++;
 
-                                    startHigh = i - counterHigh;  //set new start of this normal high
-                                    //Only if start bit called
-                                    if(endHigh!=-1) {   //only do more if it was not the first high
-                                        if(startHigh-endHigh -1 <= 100) {
-                                            zeros[startHigh-endHigh -1 -1 ]++;
-                                        } else {
-                                            zeros[99]++;
+                                    //Save the start position of the high
+                                    startHigh = position - counterHigh;
+                                    //A low can only be calculated if their is at least one previous high
+                                    if(endHigh!=-1) {
+                                        //Only count a low with a length below or equal 100
+                                        if(startHigh-endHigh-1 <= 100) {
+                                            //Increment the corresponding entry
+                                            zeros[startHigh - endHigh - 1 - 1]++;
                                         }
-
                                     }
-                                    endHigh = i - 1;  // a normal high and was processed and now set the end
-
+                                    //The high is processed and save the end position of this high
+                                    endHigh = position - 1;
                                 }
-
+                                //Reset the counter of the high values
                                 counterHigh = 0;
                             }
-                            //if no high has been - nothing happens in loop and go further in data
                         }
 
 
+                        //Four arrays are saved in the spreadsheet:
+                        //Length of the arrays dataBinary and dataMean is the same
+                        //Length of the arrays ones and zeros is the same
+                        //Loop over the arrays until the longest array is completely saved
+                        for(int position=0; position<dataBinary.length || position<ones.length;position++) {
+                            //Case that all arrays still has to be processed
+                            if(position<dataBinary.length && position<ones.length) {
+                                //Save every array in a new column
+                                fileWriter.write(Integer.toString(dataMean[position]) + ",");
+                                fileWriter.write(Integer.toString(dataBinary[position]) + ",,");
+                                fileWriter.write(Integer.toString(ones[position]) + ",");
+                                fileWriter.write(Integer.toString(zeros[position]) + "\n");
 
-                        for(int i=0; i<data1Dim.length || i<ones.length;i++) {
-                            if(i<data1Dim.length && i<ones.length) {
-                                fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
-                                fileWriter01.write(Integer.toString(data1Dim[i]) + ",,");
-                                fileWriter01.write(Integer.toString(ones[i]) + ",");
-                                fileWriter01.write(Integer.toString(zeros[i]) + "\n");
-                            } else if(i<data1Dim.length) {
-                                fileWriter01.write(Integer.toString(data1DimTest[i]) + ",");
-                                fileWriter01.write(Integer.toString(data1Dim[i]) + "\n");
-                            } else if(i<ones.length) {
-                                fileWriter01.write(",,,"+Integer.toString(ones[i]) + ",");
-                                fileWriter01.write(Integer.toString(zeros[i]) + "\n");
+                            //Case that the arrays with the image data still have to processed
+                            } else if(position<dataBinary.length) {
+                                //Save the entries of the image data arrays in the corresponding columns
+                                fileWriter.write(Integer.toString(dataMean[position]) + ",");
+                                fileWriter.write(Integer.toString(dataBinary[position]) + "\n");
+
+                            //Case that the arrays with the distribution still have to processed
+                            } else if(position<ones.length) {
+                                //Save the entries of the distribution arrays in the corresponding columns
+                                fileWriter.write(",,,"+Integer.toString(ones[position]) + ",");
+                                fileWriter.write(Integer.toString(zeros[position]) + "\n");
                             }
-
                         }
-
-
 
                     }finally {
-                        if(fileWriter01 != null)
-                            fileWriter01.close();
+                        //Close the writer
+                        if(fileWriter != null)
+                            fileWriter.close();
                     }
+
+                    //End code to display
+
 
 
                 } catch (IOException e) {
