@@ -45,6 +45,8 @@ public class MainActivity extends AppCompatActivity {
 
     private final int BUTTON_COLOR_ON = Color.RED;
     private final int BUTTON_COLOR_OFF = Color.WHITE;
+    private final String BUTTON_STRING_OFF = "Start";
+    private final String BUTTON_STRING_ON = "Stop";
 
     //Check state orientation of output image
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
@@ -164,21 +166,11 @@ public class MainActivity extends AppCompatActivity {
                 //Now distinguish between start and stopped
                 if(recordingData) {
                     startTimePut = System.nanoTime();
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() { //print out start message
-                            Toast.makeText(MainActivity.this, "Image recording has started!", Toast.LENGTH_SHORT).show();
-                        }
-                    });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
+                    btnCapture.setText(BUTTON_STRING_ON);
                 } else {
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(MainActivity.this, "Image recording has stopped!", Toast.LENGTH_SHORT).show();
-                        }
-                    });
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
+                    btnCapture.setText(BUTTON_STRING_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
                         Log.d("Threads","Waiting for threads to finish, before resetting to capture available again; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
@@ -477,7 +469,6 @@ public class MainActivity extends AppCompatActivity {
                 for(int i=0; i<imageData.dataStream.size();i++) {
                     message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));  //get decoded bytes out of dataStream
                 }
-                message=message+"; through: " + throughPut + "; good: " + goodPut + "; time: " + middleTime;
                 intent.putExtra(EXTRA_MESSAGE,message);
 
                 //Reset the data for next recording
@@ -512,7 +503,7 @@ public class MainActivity extends AppCompatActivity {
             dataTest = new ArrayList<>();
             dataStream = new ArrayList<>();
             communicationFinishedCounter = 0;
-            MESSAGE_LENGTH = 3;
+            MESSAGE_LENGTH = 10;
             COMMUNICATION_FINISHED_PARAMETER = 55;
         }
 
@@ -1087,9 +1078,9 @@ public class MainActivity extends AppCompatActivity {
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
-                                            Toast.makeText(MainActivity.this, "Message is captured, saving started!", Toast.LENGTH_SHORT).show();
                                             btnCapture.setClickable(false);
-                                            btnCapture.setBackgroundColor(Color.WHITE);
+                                            btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
+                                            btnCapture.setText(BUTTON_STRING_OFF);
                                         }
                                     });
                                     //Now cancel processing new frames and set last frame captured
