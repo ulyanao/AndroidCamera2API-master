@@ -31,9 +31,6 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,25 +70,6 @@ public class MainActivity extends AppCompatActivity {
     //Image processing
     private final ImageData imageData = new ImageData();
     public boolean recordingData;
-    //through and good put
-    private long startTimePut;
-    private long throughPut;
-    private long goodPut;
-    private int counterPut = 0;
-    //Middle time
-    private long startTimeMiddle;
-    private long middleTime = 0;
-    private long framesMiddleTime = 0;
-
-
-
-    //Manual camera settings
-    private Long expUpper;
-    private Long expLower;
-    private Integer senUpper;
-    private Integer senLower;
-    private Long fraUpper;
-    private Long fraLower;
 
     //Intent
     public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
@@ -165,7 +143,6 @@ public class MainActivity extends AppCompatActivity {
                 }
                 //Now distinguish between start and stopped
                 if(recordingData) {
-                    startTimePut = System.nanoTime();
                     btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
                     btnCapture.setText(BUTTON_STRING_ON);
                 } else {
@@ -175,12 +152,8 @@ public class MainActivity extends AppCompatActivity {
                         Log.d("Threads","Waiting for threads to finish, before resetting to capture available again; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
                     synchronized (imageData) {  //if all done clear all saved stuff; thread save
-                        imageData.dataTest.clear();
                         imageData.dataStream.clear();
                         imageData.communicationFinishedCounter = 0;
-                        framesMiddleTime =0;
-                        middleTime = 0;
-                        counterPut = 0;
                     }
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -201,34 +174,42 @@ public class MainActivity extends AppCompatActivity {
             texture.setDefaultBufferSize(imageDimension.getWidth(),imageDimension.getHeight());
             //The surface of the preview texture
             Surface surface = new Surface(texture);
-            //This is to create the surface to capture the image to the reader
+            //The surface of the image reader
             Surface imageSurface = imageReader.getSurface();
 
+            //Both surfaces are saved together in an array
             List<Surface> outputSurface = new ArrayList<>(2);
             outputSurface.add(imageSurface);
             outputSurface.add(surface);
 
-            long expTime = 1000000000/8000;    //22000 to 100000000
-            int sensitivity = 10000;               //64 to 1600 //but higher somehow possible
-            long fps = 1000000000/30;
+            long expTime = 1000000000/8000; //in nanoseconds
+            int sensitivity = 10000;    //ISO
+            long fps = 1000000000/30;   //in nanoseconds
 
-            //Set up the capture Builder with settings
+            //Initialize the capture builder by using a template
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            //Disable the automatic exposure mode
             captureRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_OFF);
+            //Set the exposure time
             captureRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, expTime);
+            //Set the sensitivity
             captureRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY,sensitivity);
+            //Set the frame rate
             captureRequestBuilder.set(CaptureRequest.SENSOR_FRAME_DURATION,fps);
 
-            //Add target to Builder - both the texture field and the reader
+            //Add both surfaces
             captureRequestBuilder.addTarget(surface);
             captureRequestBuilder.addTarget(imageSurface);
 
+            //Create the capture session
             cameraDevice.createCaptureSession(outputSurface, new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
                     if(cameraDevice == null)
                         return;
+                    //The session is created
                     cameraCaptureSessions = cameraCaptureSession;
+                    //The preview can be started
                     updatePreview();
                 }
 
@@ -243,13 +224,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Updates the camera preview, or more it starts capturing the frames and paths them to the surfaces of the session
+     * Updates the camera preview, or more it starts capturing the frames and passes them to the surfaces of the session
      */
     private void updatePreview() {
         if(cameraDevice == null)
             Toast.makeText(this, "Error", Toast.LENGTH_SHORT).show();
-        //Doesn't do anything,don't know why but I took it out, just to be sure, as it should not set the mode back to auto
-        //captureRequestBuilder.set(CaptureRequest.CONTROL_MODE,CaptureRequest.CONTROL_MODE_AUTO);
         try{
             //This says that it should repeatedly capture frames with the settings set
             cameraCaptureSessions.setRepeatingRequest(captureRequestBuilder.build(),null,mBackgroundHandler);
@@ -263,14 +242,16 @@ public class MainActivity extends AppCompatActivity {
      * Opens the camera, first initialization
      */
     private void openCamera() {
+        //Access camera manager
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
             //Get Camera ID
             cameraId = manager.getCameraIdList()[0];
+            //Get characteristics of camera
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
 
 
-            //Stuff with permission and things I don't understand
+            //Access permission for camera from the android system
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
             assert map != null;
             imageDimension = map.getOutputSizes(SurfaceTexture.class)[0];
@@ -292,9 +273,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Setup of the camera
+     */
     private void setUpCamera() {
+        //Access camera manager
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
+            //Get characteristics of camera from manager
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap configs = characteristics.get(
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -308,66 +294,54 @@ public class MainActivity extends AppCompatActivity {
             //Capture image with custom size
             int width = 640;
             int height = 480;
+            //Width and height will be overridden
             //Size is from 0(biggest) to length-1(smallest)
             if(yuvSizes != null && yuvSizes.length > 0)
             {
                 width = yuvSizes[0].getWidth();
                 height = yuvSizes[0].getHeight();
             }
-            //Set up image reader with custom size and format, image buffer set to 5, recommended for vlc
+            //Initialize the image reader with the desired width, height, format and image buffer length
             imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
+            //Disable the recording mode
             recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
+            //Listener is set up by the image reader
             final ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
-                //If image is passed to surface by capturing, the image is available in the reader and this method is called
+                //Method executed if an image is available
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
-                    startTimeMiddle=System.nanoTime();
-                    //Get image from image reader
+                    //Acquire image data from the image reader
                     Image image = imageReader.acquireNextImage();
 
-                    if (recordingData) {    //check variable if button pressed to start recording
-                        framesMiddleTime++;
-                        //Set up the data which stores the data of the image plane
-                        byte[] data = new byte[image.getWidth() * image.getHeight()];   //get byte to save image data
-                        //Get y plane of image and path buffer to data
-                        image.getPlanes()[0].getBuffer().get(data); //get data out of image
+                    //Check if recording mode is on / the transmission has started
+                    if (recordingData) {
+                        //Initialize byte array to store the image data
+                        byte[] data = new byte[image.getWidth() * image.getHeight()];
+                        //Acquire the data of the y plane from the image
+                        image.getPlanes()[0].getBuffer().get(data);
+                        //Close the image
                         image.close();
+                        //Pass the image data to the worker thread for further processing
                         try {
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcesingData(data.clone()));   //start thread to proceed the data
+                            //Accessing the thread pool and sending the received image data to a worker thread
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcesingData(data.clone()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
-
-                        middleTime = middleTime + (System.nanoTime()-startTimeMiddle)/1000000;
-
                     }else{
+                        //If recording mode is off, close the image immediately
                         image.close();
                     }
                 }
             };
             //</editor-fold>
 
-            //Image reader is set to image reader listener
+            //Image reader is linked to the listener
             imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
 
-            //Sets the manual exposure values
-            /*
-            Range expRange  = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE);
-            expUpper = (Long) expRange.getUpper();
-            expLower = (Long) expRange.getLower();
-
-            Range senRange = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE);
-            senUpper = (Integer) senRange.getUpper();
-            senLower = (Integer) senRange.getLower();
-            */
-
-            expLower = (Long) (long) (1000000000/8000);    //22000 to 100000000
-            senUpper = (Integer) (int) 10000;               //64 to 1600 //but higher somehow possible
-            fraUpper = (Long) (long) 1000000000/30;
-
-
+            //Next step is the setup of the preview
             createCameraPreview();
 
         } catch (CameraAccessException e) {
@@ -378,6 +352,7 @@ public class MainActivity extends AppCompatActivity {
     //</editor-fold>
 
     //<editor-fold desc="Sub methods">
+    //Request permission from the user to open the camera
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
        if(requestCode == REQUEST_CAMERA_PERMISSION)
@@ -392,6 +367,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
+        //Is called after the the user returns to the application
         super.onResume();
         startBackgroundThread();
         if(textureView.isAvailable())
@@ -402,11 +378,13 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
+        //Is called if the application is paused
         stopBackgroundThread();
         super.onPause();
     }
 
     private void stopBackgroundThread() {
+        //The background work is stopped if application is paused
         mBackgroundThread.quitSafely();
         try{
             mBackgroundThread.join();
@@ -418,9 +396,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startBackgroundThread() {
+        //Creates the new thread
         mBackgroundThread = new HandlerThread("Camera Background");
+        //Sets the priority of the new thread to the maximum
         mBackgroundThread.setPriority(Thread.MAX_PRIORITY);
+        //Starts the thread
         mBackgroundThread.start();
+        //Assigns the new background thread to a handler, which is linked to the camera session
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
     //</editor-fold>
@@ -429,56 +411,39 @@ public class MainActivity extends AppCompatActivity {
     private class ThreadSaveData extends Thread {
 
         public void run() {
-            while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //wait until all threads are finished
-                Log.d("Threads","Waiting for threads to finish, before saving; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
-            }
-            //set up new activity to display output
+            //wait until all threads of the thread pool are finished with executing
+            while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {}
+
+            //set up an intent to send the message to the new activity
             Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
-            //get all data to the message string
+            //Initialize the string for the message
             String message = "";
 
-            //Now get all the data out of imageData
-            synchronized (imageData) {  //be thread save, double secure
-                try {
-                    for(int i = 0; i<imageData.dataTest.size(); i++) {  //loop through image data test, and do what want to do
-                        //set up the file path
-                        File file = new File(Environment.getExternalStorageDirectory()+"/yuv/E"+expLower+"_S"+senUpper+"_H"+imageData.dataTest.get(i).length+".csv");
-                        //Stream of text file
-                        FileWriter fileWriter = null;
-                        try{
-                            fileWriter = new FileWriter(file);
+            //Access the data
+            synchronized (imageData) {
 
-                            for(int n = 0; n<(imageData.dataTest.get(i).length); n++) {
-                                fileWriter.write(Integer.toString(imageData.dataTest.get(i)[n])+"\n");
-                            }
-                        }finally {
-                            if(fileWriter != null)
-                                fileWriter.close();
-                        }
-
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                //Set up the times:
-                middleTime=middleTime/framesMiddleTime;
-
-
-                //Set up the message for new activity out of imageData
+                //Access the bytes of the dataStream list and save theses as characters to the message string
                 for(int i=0; i<imageData.dataStream.size();i++) {
-                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));  //get decoded bytes out of dataStream
+                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
                 }
+                //Add an identification to the intent
                 intent.putExtra(EXTRA_MESSAGE,message);
 
-                //Reset the data for next recording
-                imageData.dataTest.clear();
+                //Finally reset the data, to be ready for a new communication
                 imageData.dataStream.clear();
                 imageData.communicationFinishedCounter = 0;
-                framesMiddleTime =0;
-                middleTime=0;
-                counterPut = 0;
             }
+
+            //Activate the capture button
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    btnCapture.setClickable(true);
+                }
+            });
+
+            //Start the new activity by passing the message with the intent
+            startActivity(intent);
 
             //Now Reset Button and output message
             runOnUiThread(new Runnable() {
@@ -493,27 +458,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public class ImageData {
-        public List<int[]> dataTest;
+        //Initialization of the variables
+        //The list where the bytes of the final message are stored
         public List<Byte> dataStream;
+        //The variable which is used as a counter to check if the communication is finished
         public int communicationFinishedCounter;
+        //The length of the message
         public final int  MESSAGE_LENGTH;
-        public final int  COMMUNICATION_FINISHED_PARAMETER;
+        //The parameter which is used to set to determine the end of the communication
+        public final int COMMUNICATION_FINISHED_PARAMETER;
 
         ImageData() {
-            dataTest = new ArrayList<>();
+            //Initialization of the list
             dataStream = new ArrayList<>();
+            //Set the Counter to 0, since no data received yet
             communicationFinishedCounter = 0;
+            //Set it to the length of the message in bytes
             MESSAGE_LENGTH = 10;
+            //Set this counter to 55
             COMMUNICATION_FINISHED_PARAMETER = 55;
         }
-
     }
 
     private class RunnableProcesingData implements Runnable {
-        //Initialization
+        //Variables
         byte[] data;
 
         RunnableProcesingData(byte[] data) {
+            //Initialization
             this.data = data;
         }
 
@@ -810,7 +782,7 @@ public class MainActivity extends AppCompatActivity {
                     byte[] decodedDataFrame = new byte[12];
                     //buffer
                     byte byteBuffer;
-                    //Tracks the block part; there are three parts, since three times six chips in one block
+                    //Tracks the block part; there are three parts, since three times six bits in one block
                     int blockPart = 0;
                     //The current position in the final decodedData array
                     int positionDecodedData = 0;
@@ -969,9 +941,9 @@ public class MainActivity extends AppCompatActivity {
                                         }
 
                                         //Every time a high is proceeded, check if a part of the block is finished:
-                                        //Check if temporary buffer is filled with 6 chips and it is the first block part
+                                        //Check if temporary buffer is filled with 6 bits and it is the first block part
                                         if(positionEncodedData==6 && blockPart==0) {
-                                            //Decode the 6 chips - result 4 bits, which represent the block number
+                                            //Decode the 6 bits - result 4 bits, which represent the block number
                                             if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
                                                 //Save the 4 bits (block number) in the final data array
                                                 decodedDataFrame[positionDecodedData] = byteBuffer;
@@ -988,9 +960,9 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                             }
 
-                                        //Check if temporary buffer is filled with 6 chips and it is the second block part
+                                        //Check if temporary buffer is filled with 6 bits and it is the second block part
                                         } else if(positionEncodedData==6 && blockPart == 1) {
-                                            //Decode the 6 chips - result 4 bits, which represent the first 4 bit of the data byte
+                                            //Decode the 6 bits - result 4 bits, which represent the first 4 bit of the data byte
                                             if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
                                                 //Save the first 4 bit of the final data byte in the final data array
                                                 //Do not increment position in final data array, since the other 4 bit are added later
@@ -1006,9 +978,9 @@ public class MainActivity extends AppCompatActivity {
                                                 error = true;
                                             }
 
-                                        //Check if temporary buffer is filled with 6 chips and it is the last block part
+                                        //Check if temporary buffer is filled with 6 bits and it is the last block part
                                         } else if(positionEncodedData == 6) {
-                                            //Decode the 6 chips - result 4 bits, which represent the other 4 bit of the data byte
+                                            //Decode the 6 bits - result 4 bits, which represent the other 4 bit of the data byte
                                             if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
                                                 //Save the other 4 bit of the final data byte in the final data array
                                                 decodedDataFrame[positionDecodedData] = (byte) (byteBuffer | decodedDataFrame[positionDecodedData]);
@@ -1055,50 +1027,56 @@ public class MainActivity extends AppCompatActivity {
                     //</editor-fold>
 
                     synchronized (imageData) {
-                        if (imageData.communicationFinishedCounter != imageData.COMMUNICATION_FINISHED_PARAMETER) { //stops still executing threads from interacting during proceeding the final message
-                            for(int n=0;decodedDataFrame[n] > 0 && decodedDataFrame[n+1]!=0 && decodedDataFrame[n] <= imageData.MESSAGE_LENGTH;n+=2) {   //check if at least one byte of frame readable, than process this byte
+                        //Only save data if the communication is not already finished
+                        if (imageData.communicationFinishedCounter != imageData.COMMUNICATION_FINISHED_PARAMETER) {
+
+                            //Check if the block number of the byte is within the range of the message length
+                            //Check if the decoded data is not null
+                            for(int n=0;decodedDataFrame[n] > 0 && decodedDataFrame[n+1]!=0 && decodedDataFrame[n] <= imageData.MESSAGE_LENGTH;n+=2) {
+                                //If the size of the list is too small, increase the size according to the block number
                                 while(imageData.dataStream.size()<decodedDataFrame[n]) {
                                     imageData.dataStream.add((byte) 0);
                                 }
+
+                                //Check if the same block has not already been detected
                                 if(imageData.dataStream.get(decodedDataFrame[n]-1) == 0) {
+                                    //Set the data to the position of the block number
                                     imageData.dataStream.set(decodedDataFrame[n]-1,decodedDataFrame[n+1]);
+                                    //Add the block number to the counter
                                     imageData.communicationFinishedCounter +=decodedDataFrame[n];
                                 }
-                                if(counterPut<10) {
-                                    counterPut++;
-                                }
-                                if(counterPut==10) {
-                                    counterPut++;
-                                    throughPut = (System.nanoTime()-startTimePut)/1000000;
-                                }
-                                if (imageData.communicationFinishedCounter == imageData.COMMUNICATION_FINISHED_PARAMETER) {  //my condition to stop
-                                    goodPut = (System.nanoTime()-startTimePut)/1000000;
-                                    Log.d("TimeCheck", "End and time in middle: " + (middleTime)/ framesMiddleTime);
-                                    //UI thread to display saving and change button status
+
+                                //After every block, check if the message is completed
+                                if (imageData.communicationFinishedCounter == imageData.COMMUNICATION_FINISHED_PARAMETER) {
+                                    //Stop the recording of new frames
+                                    recordingData = false;
+
+                                    //Start a new thread to prepare the displaying of the message
+                                    ThreadSaveData threadSaveData = new ThreadSaveData();
+                                    threadSaveData.start();
+
+                                    //Execute task on UI thread to change UI elements
                                     runOnUiThread(new Runnable() {
                                         @Override
                                         public void run() {
+                                            //Disable capture button and set the color back to non recording mode
                                             btnCapture.setClickable(false);
-                                            btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
+                                            btnCapture.setBackgroundColor(Color.WHITE);
                                             btnCapture.setText(BUTTON_STRING_OFF);
                                         }
                                     });
-                                    //Now cancel processing new frames and set last frame captured
-                                    recordingData = false;  //stop recording in image reader
-                                    //For debugging
-                                    imageData.dataTest.add(data1Dim);  //add data to be saved
 
-                                    //New Thread to handle saving
-                                    ThreadSaveData threadSaveData = new ThreadSaveData();
-                                    threadSaveData.start();
-                                    break;  //break from loop as enough bytes captured
+                                    //Stop the loop to hinder the processing of more blocks
+                                    break;
                                 }
                             }
                         }
                     }
+
                 }
             }
         }
+        //The mapping for 4Bit6Bit
         private byte decode4Bit6Bit(byte dataCoded) {
             byte data = -1;
             switch (dataCoded) {
