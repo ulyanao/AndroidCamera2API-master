@@ -1,3 +1,4 @@
+//This is the thread manager class, which is used to coordinate the thread management
 package edmt.dev.androidcamera2api;
 
 import java.util.concurrent.ArrayBlockingQueue;

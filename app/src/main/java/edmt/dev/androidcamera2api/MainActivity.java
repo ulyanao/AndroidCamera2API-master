@@ -1,3 +1,4 @@
+//This is the main activity class, where the camera is set up and the recording and processing of the data takes place
 package edmt.dev.androidcamera2api;
 
 import android.Manifest;

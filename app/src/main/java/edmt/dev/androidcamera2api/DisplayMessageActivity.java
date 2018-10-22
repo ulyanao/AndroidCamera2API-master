@@ -1,3 +1,4 @@
+//This is the class for the display message activity, which is created with the receiving of the message
 package edmt.dev.androidcamera2api;
 
 import android.content.Intent;

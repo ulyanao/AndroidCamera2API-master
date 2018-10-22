@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- This file is used for the basic settings of the Android application, like setting the application name or requesting permission from the user -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="edmt.dev.androidcamera2api">
 
+    <!-- Defines the permissions that have to be requested -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.hardware.camera2.full" />
 
+    <!-- General settings -->
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
