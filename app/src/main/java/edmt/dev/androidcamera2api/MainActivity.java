@@ -16,7 +16,6 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -443,16 +442,6 @@ public class MainActivity extends AppCompatActivity {
             });
 
             //Start the new activity by passing the message with the intent
-            startActivity(intent);
-
-            //Now Reset Button and output message
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    btnCapture.setClickable(true);
-                }
-            });
-            //Start the display activity
             startActivity(intent);
         }
     }
