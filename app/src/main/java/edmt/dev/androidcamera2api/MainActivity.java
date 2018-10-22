@@ -36,15 +36,17 @@ import java.util.List;
 public class MainActivity extends AppCompatActivity {
 
     //<editor-fold desc="Declaration">
+    //The user interface variables
     private TextureView textureView;
     private Button btnCapture;
 
+    //Predefined styles for the button
     private final int BUTTON_COLOR_ON = Color.RED;
     private final int BUTTON_COLOR_OFF = Color.WHITE;
     private final String BUTTON_STRING_OFF = "Start";
     private final String BUTTON_STRING_ON = "Stop";
 
-    //Check state orientation of output image
+    //Definitions for orientation of output image
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static{
         ORIENTATIONS.append(Surface.ROTATION_0,90);
@@ -61,16 +63,18 @@ public class MainActivity extends AppCompatActivity {
     private Size imageDimension;
     private ImageReader imageReader;
 
-    //Save to FILE
+    //Permission of Camera identifier
     private static final int REQUEST_CAMERA_PERMISSION = 200;
+    //Camera background thread and handler
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
 
-    //Image processing
+    //The object containing the image data and the variables that are accessed across multiple threads
     private final ImageData imageData = new ImageData();
+    //The Boolean to check if the recording mode is on or off
     public boolean recordingData;
 
-    //Intent
+    //Identifier for the intent
     public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
 
     //Callback of camera device
@@ -123,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //Set up of the texture view
         textureView = (TextureView)findViewById(R.id.textureView);
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
@@ -148,9 +153,8 @@ public class MainActivity extends AppCompatActivity {
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     btnCapture.setText(BUTTON_STRING_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
-                        Log.d("Threads","Waiting for threads to finish, before resetting to capture available again; active threads: "+ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount());
                     }
-                    synchronized (imageData) {  //if all done clear all saved stuff; thread save
+                    synchronized (imageData) {  //if all done clear all saved data
                         imageData.dataStream.clear();
                         imageData.communicationFinishedCounter = 0;
                     }
