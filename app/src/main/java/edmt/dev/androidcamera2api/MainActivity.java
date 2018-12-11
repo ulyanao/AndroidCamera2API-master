@@ -34,6 +34,8 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.List;
 
+import static java.lang.Math.abs;
+
 public class MainActivity extends AppCompatActivity {
 
     //<editor-fold desc="Declaration">
@@ -743,7 +745,6 @@ public class MainActivity extends AppCompatActivity {
                 //</editor-fold>
 
                 if (threshValues.size()>=MINIMUM_CONSECUTIVE_STRIPES) {
-                    //Beta; will be implemented in decoding for faster processing
                     //<editor-fold desc="Downsampling">
                     //Variables
                     int counterThreshIntervals = 0;
@@ -798,9 +799,21 @@ public class MainActivity extends AppCompatActivity {
                     boolean startError = false;
                     //Is set if a block is finished
                     boolean blockFinished = true;
+                    //Is set to identify if the detection for block number is active, running backwards in the data stream
+                    boolean blockNumber = false;
+                    //Is used to save the position of the start bit to use when the block number detection is over
+                    int positionStartBit = -1;
                     //<editor-fold desc="Algorithm">
 
                     for (int position = 0; position<height; position++) {
+                        //If block number detection, go backward in data stream
+                        if(blockNumber && position>=2) {
+                            position-=2;
+                        } else if(blockNumber) {
+                            //Data stream is at minimum, so set error to start new at last start bit
+                            error = true;
+                        }
+
                         //check if an error occurred
                         if(error) {
                             //Reset the variables to start new
@@ -822,10 +835,22 @@ public class MainActivity extends AppCompatActivity {
                             lastBit = -1;
                             //Check if error with start bit
                             if(startError) {
-                                //Start bit can be set to progress with this further
-                                lastBit=2;
                                 //Reset the flag
                                 startError = false;
+                                //Set start bit, so that the start bit is used
+                                lastBit = 2;
+
+                                //If start error occurs while running backward, do not use the block number handler (else if). Otherwise the start bit would not be used
+                            } else if(blockNumber) {
+                                //If error while running backward
+                                //Block number false to start normal at last start bit
+                                blockNumber=false;
+                                //Get old position back
+                                position=positionStartBit;
+                                //Do not use the last detected bit
+                                lastBit = -1;
+                                //Set last high to the detected old start bit
+                                endHigh = positionStartBit-1;
                             }
                         }
 
@@ -838,94 +863,195 @@ public class MainActivity extends AppCompatActivity {
                         } else if(counterHigh != 0) {
                             //Check if it is a long high, respectively a start bit
                             if(30<=counterHigh && counterHigh<=50) {
-                                //set the last bit and the position
-                                lastBit = 2;
-                                endHigh = position - 1;
-                                //Check if it is an error, since a new start bit is detected too early
-                                if(!blockFinished) {
-                                    //Set the error flag
+                                //If start bit while running backward
+                                if(blockNumber) {
+                                    //Set normal error, to start again
+                                    //Important to not end in an infinity loop
                                     error = true;
-                                    //Set the flag to not discard the detected start bit
-                                    startError = true;
+
+                                    //If detected in normal mode
+                                } else {
+                                    //set the last bit and the position
+                                    lastBit = 2;
+                                    //Set position of start bit to remember
+                                    positionStartBit = position;
+                                    //Save position of high
+                                    endHigh = position - counterHigh;
+                                    //Set block number detection active
+                                    blockNumber = true;
+
+                                    //Check if it is an error, since a new start bit is detected too early
+                                    if(!blockFinished) {
+                                        //Set the error flag
+                                        error = true;
+                                        //Set the flag to not discard the detected start bit
+                                        startError = true;
+                                    }
+                                    //Set flag that a new block has started
+                                    blockFinished=false;
                                 }
-                                //Set flag that a new block has started
-                                blockFinished=false;
 
                             //Check if it is a normal high
                             } else if(8<=counterHigh && counterHigh<=29) {
                                 //Set the start of the high
                                 startHigh = position - counterHigh;
+                                //Position if in block number mode
+                                if(blockNumber) {
+                                    startHigh = position + counterHigh;
+                                }
+
                                 //Only process further if the end position of the last high is available - so it is not the first high and no error before
                                 if(endHigh!=-1) {
                                     //Calculate the number of zeros (the length of the low) in between the last highs
-                                    lengthLow = startHigh-endHigh-1;
+                                    lengthLow = abs(startHigh-endHigh)-1;
+
+                                    //Save position of the current high for further runs
+                                    endHigh = position - 1;
+                                    //Position differs if in block number mode
+                                    if(blockNumber) {
+                                        endHigh = position + 1;
+                                    }
 
                                     //Check the different length:
                                     //Check if it is a start bit
                                     if(1 <= lengthLow && lengthLow <= 8) {
-                                        //start bit
-                                        lastBit = 2;
-                                        //Check if it is an error, since a new start bit is detected too early
-                                        if(!blockFinished) {
-                                            //Set the error flag
+                                        //If start bit while running backward
+                                        if(blockNumber) {
+                                            //Set normal error, to start again
+                                            //Important to not end in an infinity loop
                                             error = true;
-                                            //Set the flag to not discard the detected start bit
-                                            startError = true;
+
+                                            //If detected in normal mode
+                                        } else {
+                                            //set the last bit and the position
+                                            lastBit = 2;
+                                            //Set position of start bit to remember
+                                            positionStartBit = position;
+                                            //Save position of high
+                                            endHigh = position - counterHigh;
+                                            //Set block number detection active
+                                            blockNumber = true;
+
+                                            //Check if it is an error, since a new start bit is detected too early
+                                            if(!blockFinished) {
+                                                //Set the error flag
+                                                error = true;
+                                                //Set the flag to not discard the detected start bit
+                                                startError = true;
+                                            }
+                                            //Set flag that a new block has started
+                                            blockFinished=false;
                                         }
-                                        //Set flag that a new block has started
-                                        blockFinished=false;
 
                                     //Only check the other lows if last bit is available
                                     } else if (lastBit!=-1) {
                                         //Check if it is a 0.2 ms low
                                         if(8 <= lengthLow && lengthLow <= 23){
-                                            //Differentiate according to the last bit
-                                            if(lastBit == 2 || lastBit == 0) {
-                                                //The new bit has the value 1
-                                                //Save the bit in the temporary buffer
-                                                encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
-                                                //Increment position in buffer
-                                                positionEncodedData++;
-                                                //Set the current bit as last bit
-                                                lastBit = 1;
+                                            //Check if block number
+                                            if(blockNumber) {
+                                                if(lastBit == 2 || lastBit == 1) {
+                                                    //It is a 0
+                                                    //Do not have to write to buffer, since buffer is initialized with 0
+                                                    //Increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 0;
+
+                                                } else {
+                                                    //Error, other last bits not possible
+                                                    error = true;
+                                                }
+
                                             } else {
-                                                //Error, other last bits not possible
-                                                error = true;
+
+                                                if(lastBit == 2 || lastBit == 0) {
+                                                    //The new bit has the value 1
+                                                    //Save the bit in the temporary buffer
+                                                    encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                    //Increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 1;
+                                                } else {
+                                                    //Error, other last bits not possible
+                                                    error = true;
+                                                }
+
                                             }
+
+
+
 
                                         //Check if it is a 0.4 ms low
                                         } else if(24 <= lengthLow && lengthLow <= 42){
                                             //Differentiate according to the last bit
-                                            if(lastBit == 2 || lastBit == 0) {
-                                                //The new bit has the value 0
-                                                //Do not have to write to buffer, since buffer is initialized with 0
-                                                //Only increment position in buffer
-                                                positionEncodedData++;
-                                                //Set the current bit as last bit
-                                                lastBit = 0;
+                                            if(blockNumber) {
+                                                if(lastBit == 2 || lastBit == 1) {
+                                                    //It is a 1
+                                                    encodedData = (byte) ((1 << (positionEncodedData) | encodedData));
+                                                    //Increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 1;
+
+                                                } else {
+                                                    //It is a 0
+                                                    //Increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 0;
+                                                }
+
                                             } else {
-                                                //The new bit has the value 1
-                                                //Save the bit in the temporary buffer
-                                                encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
-                                                //Increment position in buffer
-                                                positionEncodedData++;
-                                                //Set the current bit as last bit
-                                                lastBit = 1;
+
+                                                if(lastBit == 2 || lastBit == 0) {
+                                                    //The new bit has the value 0
+                                                    //Do not have to write to buffer, since buffer is initialized with 0
+                                                    //Only increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 0;
+                                                } else {
+                                                    //The new bit has the value 1
+                                                    //Save the bit in the temporary buffer
+                                                    encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                    //Increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 1;
+                                                }
+
                                             }
 
                                         //Check if it is a 0.6 ms low
                                         } else if(43 <= lengthLow && lengthLow <= 62){
                                             //Differentiate according to the last bit
-                                            if(lastBit == 1) {
-                                                //The new bit has the value 0
-                                                //Do not have to write to buffer, since buffer is initialized with 0
-                                                //Only increment position in buffer
-                                                positionEncodedData++;
-                                                //Set the current bit as last bit
-                                                lastBit = 0;
+                                            if(blockNumber) {
+                                                if(lastBit == 0) {
+                                                    //It is a 1
+                                                    encodedData = (byte) ((1 << (positionEncodedData) | encodedData));
+                                                    positionEncodedData++;
+                                                    lastBit = 1;
+
+                                                } else {
+                                                    //Error, other last bits not possible
+                                                    error = true;
+                                                }
+
+
                                             } else {
-                                                //Error, other last bits not possible
-                                                error = true;
+                                                if(lastBit == 1) {
+                                                    //The new bit has the value 0
+                                                    //Do not have to write to buffer, since buffer is initialized with 0
+                                                    //Only increment position in buffer
+                                                    positionEncodedData++;
+                                                    //Set the current bit as last bit
+                                                    lastBit = 0;
+                                                } else {
+                                                    //Error, other last bits not possible
+                                                    error = true;
+                                                }
+
                                             }
 
                                         //The length of the low is not mapped
@@ -935,10 +1061,10 @@ public class MainActivity extends AppCompatActivity {
                                         }
 
                                         //Every time a high is proceeded, check if a part of the block is finished:
-                                        //Check if temporary buffer is filled with 6 bits and it is the first block part
-                                        if(positionEncodedData==6 && blockPart==0) {
-                                            //Decode the 6 bits - result 4 bits, which represent the block number
-                                            if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
+                                        //Check if temporary buffer is filled with 3 bits and it is the first block part
+                                        if(positionEncodedData==3 && blockPart==0) {
+                                            //Decode the 3 bits - result 3 bits, which represent the block number
+                                            if ((byteBuffer = decodeBlockNumber(encodedData)) != -1) {
                                                 //Save the 4 bits (block number) in the final data array
                                                 decodedDataFrame[positionDecodedData] = byteBuffer;
                                                 //Reset the position in the encoded data buffer
@@ -949,6 +1075,13 @@ public class MainActivity extends AppCompatActivity {
                                                 blockPart = 1;
                                                 //Increment the position in the final data array
                                                 positionDecodedData++;
+
+                                                //Change from backward mode to forward mode
+                                                position=positionStartBit;
+                                                blockNumber=false;
+                                                lastBit=2;
+                                                endHigh=positionStartBit - 1;
+
                                             } else {
                                                 //Error, not possible bit sequence
                                                 error = true;
@@ -991,10 +1124,11 @@ public class MainActivity extends AppCompatActivity {
                                             error = true;
                                         }
                                     }
+                                } else {
+                                    //Set the endHigh if it is the first high and no previous high available
+                                    endHigh = position - 1;
                                 }
-                                //The high has been processed
-                                //Save the end position of the high
-                                endHigh = position - 1;
+
                             } else if(counterHigh>=50){
                                 //The high is too long
                                 //Set error flag
@@ -1122,6 +1256,24 @@ public class MainActivity extends AppCompatActivity {
                 case 44:
                     data = 15;
                     break;
+            }
+            return data;    //returns -1 if error
+        }
+
+        private byte decodeBlockNumber(byte dataCoded) {
+            byte data = -1;
+            switch (dataCoded) {
+                case 1:
+                    data = 1;
+                    break;
+                case 3:
+                    data = 2;
+                    break;
+                case 5:
+                    data = 3;
+                    break;
+                case 8:
+                    data = 4;
             }
             return data;    //returns -1 if error
         }
