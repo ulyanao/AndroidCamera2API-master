@@ -881,6 +881,8 @@ public class MainActivity extends AppCompatActivity {
                                     positionStartBit = position;
                                     //Save position of high
                                     endHigh = position - counterHigh;
+                                    //Set start position to beginning of start bit
+                                    position=endHigh;
                                     //Set block number detection active
                                     blockNumber = true;
 
@@ -933,6 +935,8 @@ public class MainActivity extends AppCompatActivity {
                                             positionStartBit = position;
                                             //Save position of high
                                             endHigh = position - counterHigh;
+                                            //Set start position to beginning of start bit
+                                            position=endHigh;
                                             //Set block number detection active
                                             blockNumber = true;
 
