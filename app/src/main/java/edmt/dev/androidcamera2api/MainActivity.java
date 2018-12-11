@@ -470,9 +470,13 @@ public class MainActivity extends AppCompatActivity {
             //Set the Counter to 0, since no data received yet
             communicationFinishedCounter = 0;
             //Set it to the length of the message in bytes
-            MESSAGE_LENGTH = 10;
-            //Set this counter to 55
-            COMMUNICATION_FINISHED_PARAMETER = 55;
+            MESSAGE_LENGTH = 3;
+            //Set this counter
+            int buffer = 0;
+            for(int n=0;n<=MESSAGE_LENGTH;n++) {
+                buffer+=n;
+            }
+            COMMUNICATION_FINISHED_PARAMETER = buffer;
         }
     }
 
