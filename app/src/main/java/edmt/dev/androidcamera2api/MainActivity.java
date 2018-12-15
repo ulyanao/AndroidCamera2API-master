@@ -975,7 +975,7 @@ public class MainActivity extends AppCompatActivity {
                                                 if(lastBit == 2 || lastBit == 0) {
                                                     //The new bit has the value 1
                                                     //Save the bit in the temporary buffer
-                                                    encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                    encodedData = (byte) ((1 << (positionEncodedData) | encodedData));
                                                     //Increment position in buffer
                                                     positionEncodedData++;
                                                     //Set the current bit as last bit
@@ -1022,7 +1022,7 @@ public class MainActivity extends AppCompatActivity {
                                                 } else {
                                                     //The new bit has the value 1
                                                     //Save the bit in the temporary buffer
-                                                    encodedData = (byte) ((1 << (5-positionEncodedData) | encodedData));
+                                                    encodedData = (byte) ((1 << (positionEncodedData) | encodedData));
                                                     //Increment position in buffer
                                                     positionEncodedData++;
                                                     //Set the current bit as last bit
@@ -1101,7 +1101,7 @@ public class MainActivity extends AppCompatActivity {
                                             if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
                                                 //Save the first 4 bit of the final data byte in the final data array
                                                 //Do not increment position in final data array, since the other 4 bit are added later
-                                                decodedDataFrame[positionDecodedData] = (byte) (byteBuffer << 4);
+                                                decodedDataFrame[positionDecodedData] = byteBuffer;
                                                 //Reset the position in the encoded data buffer
                                                 positionEncodedData = 0;
                                                 //Reset the temporary encoded data buffer
@@ -1118,7 +1118,7 @@ public class MainActivity extends AppCompatActivity {
                                             //Decode the 6 bits - result 4 bits, which represent the other 4 bit of the data byte
                                             if ((byteBuffer = decode4Bit6Bit(encodedData)) != -1) {
                                                 //Save the other 4 bit of the final data byte in the final data array
-                                                decodedDataFrame[positionDecodedData] = (byte) (byteBuffer | decodedDataFrame[positionDecodedData]);
+                                                decodedDataFrame[positionDecodedData] = (byte) ((byteBuffer << 4) | decodedDataFrame[positionDecodedData]);
                                                 //Increment the position in the final data array
                                                 positionDecodedData++;
                                                 //Set the block part to 0 again to start with a new block
