@@ -76,6 +76,11 @@ public class MainActivity extends AppCompatActivity {
     private final ImageData imageData = new ImageData();
     //The Boolean to check if the recording mode is on or off
     public boolean recordingData;
+    //through and good put
+    private long startTimePut;
+    private long throughPut;
+    private long goodPut;
+    private int counterPut = 0;
 
     //Identifier for the intent
     public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
@@ -150,6 +155,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 //Now distinguish between start and stopped
                 if(recordingData) {
+                    startTimePut = System.nanoTime();
                     btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
                     btnCapture.setText(BUTTON_STRING_ON);
                 } else {
@@ -160,6 +166,7 @@ public class MainActivity extends AppCompatActivity {
                     synchronized (imageData) {  //if all done clear all saved data
                         imageData.dataStream.clear();
                         imageData.communicationFinishedCounter = 0;
+                        counterPut = 0;
                     }
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -432,12 +439,14 @@ public class MainActivity extends AppCompatActivity {
                 for(int i=0; i<imageData.dataStream.size();i++) {
                     message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
                 }
+                message=message+"; through (ms): " + throughPut + "; good (ms): " + goodPut;
                 //Add an identification to the intent
                 intent.putExtra(EXTRA_MESSAGE,message);
 
                 //Finally reset the data, to be ready for a new communication
                 imageData.dataStream.clear();
                 imageData.communicationFinishedCounter = 0;
+                counterPut = 0;
             }
 
             //Activate the capture button
@@ -1182,8 +1191,17 @@ public class MainActivity extends AppCompatActivity {
                                     imageData.communicationFinishedCounter +=decodedDataFrame[n];
                                 }
 
+                                if(counterPut<10) {
+                                    counterPut++;
+                                }
+                                if(counterPut==10) {
+                                    counterPut++;
+                                    throughPut = (System.nanoTime() - startTimePut) / 1000000;
+                                }
+
                                 //After every block, check if the message is completed
                                 if (imageData.communicationFinishedCounter == imageData.COMMUNICATION_FINISHED_PARAMETER) {
+                                    goodPut = (System.nanoTime()-startTimePut)/1000000;
                                     //Stop the recording of new frames
                                     recordingData = false;
 
