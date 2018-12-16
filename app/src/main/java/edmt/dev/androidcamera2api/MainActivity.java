@@ -1191,10 +1191,10 @@ public class MainActivity extends AppCompatActivity {
                                     imageData.communicationFinishedCounter +=decodedDataFrame[n];
                                 }
 
-                                if(counterPut<10) {
+                                if(counterPut<3) {
                                     counterPut++;
                                 }
-                                if(counterPut==10) {
+                                if(counterPut==3) {
                                     counterPut++;
                                     throughPut = (System.nanoTime() - startTimePut) / 1000000;
                                 }
