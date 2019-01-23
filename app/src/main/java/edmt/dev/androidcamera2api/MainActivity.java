@@ -17,6 +17,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -59,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //Camera variables
+    private CameraManager manager;
     private String cameraId;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSessions;
@@ -96,7 +98,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
             cameraDevice.close();
-            cameraDevice=null;
         }
     };
 
@@ -141,18 +142,17 @@ public class MainActivity extends AppCompatActivity {
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                btnCapture.setClickable(false);     //if clicked disable until proceeded
-                recordingData = !recordingData;     //first disable recording data to stop capturing frames
-                synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
-                    if (!recordingData) {
+                btnCapture.setClickable(false);     //If clicked disable until proceeded
+                boolean recordingDataBuffer = !recordingData;   //Save the state the recordingData should get afterwards
+                recordingData = false;     //Disable recording data to stop capturing frames as quickly as possible
+                synchronized (imageData) {          //Second if have been recording, stop frames from processing more data; all thread save
+                    if (!recordingDataBuffer) {
                         imageData.communicationFinishedCounter = imageData.COMMUNICATION_FINISHED_PARAMETER;
                     }
                 }
                 //Now distinguish between start and stopped
-                if(recordingData) {
-                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
-                    btnCapture.setText(BUTTON_STRING_ON);
-                } else {
+                if(!recordingDataBuffer) {
+                    //Stopped
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     btnCapture.setText(BUTTON_STRING_OFF);
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
@@ -161,6 +161,15 @@ public class MainActivity extends AppCompatActivity {
                         imageData.dataStream.clear();
                         imageData.communicationFinishedCounter = 0;
                     }
+                } else {
+                    //Started
+                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
+                    btnCapture.setText(BUTTON_STRING_ON);
+
+                    //flashLight();
+
+                    recordingData=true;
+
                 }
                 btnCapture.setClickable(true);  //let the user click again
             }
@@ -248,14 +257,18 @@ public class MainActivity extends AppCompatActivity {
      * Opens the camera, first initialization
      */
     private void openCamera() {
-        //Access camera manager
-        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
-        try{
-            //Get Camera ID
+        //Opens Camera Manager
+        manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
+        try {
+            //Gets the ID
             cameraId = manager.getCameraIdList()[0];
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+
+        try{
             //Get characteristics of camera
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-
 
             //Access permission for camera from the android system
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -283,8 +296,6 @@ public class MainActivity extends AppCompatActivity {
      * Setup of the camera
      */
     private void setUpCamera() {
-        //Access camera manager
-        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
             //Get characteristics of camera from manager
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -411,6 +422,31 @@ public class MainActivity extends AppCompatActivity {
         //Assigns the new background thread to a handler, which is linked to the camera session
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
+
+
+    private void flashLight() {
+
+        try {
+            manager.setTorchMode(cameraId, true);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+
+        try {
+                Thread.currentThread().wait(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+        try {
+            manager.setTorchMode(cameraId, false);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+
+
+    }
+
     //</editor-fold>
 
     //<editor-fold desc="Threads">
