@@ -172,6 +172,8 @@ public class MainActivity extends AppCompatActivity {
                     updatePreview();
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     btnCapture.setText(BUTTON_STRING_OFF);
+                    //Shutdown all left tasks
+                    ThreadManager.getInstance().getmDecoderThreadPool().shutdownNow();
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
                     }
                     synchronized (imageData) {  //if all done clear all saved data
@@ -509,6 +511,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void run() {
             //wait until all threads of the thread pool are finished with executing
+            ThreadManager.getInstance().getmDecoderThreadPool().shutdownNow();
             while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {}
 
             //set up an intent to send the message to the new activity
