@@ -432,29 +432,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private void flashLight() {
-
-        try {
-            manager.setTorchMode(cameraId, true);
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-
-        try {
-                Thread.currentThread().wait(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-        try {
-            manager.setTorchMode(cameraId, false);
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
-
-
-    }
-
     //</editor-fold>
 
     //<editor-fold desc="Threads">
