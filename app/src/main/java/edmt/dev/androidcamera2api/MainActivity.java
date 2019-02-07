@@ -728,7 +728,6 @@ public class MainActivity extends AppCompatActivity {
             }
             //</editor-fold>
             //</editor-fold>
-            consecutiveStripesHighestAll=MINIMUM_CONSECUTIVE_STRIPES;
             //Check if ROI found otherwise discard frame
             if(consecutiveStripesHighestAll>=MINIMUM_CONSECUTIVE_STRIPES) {
                 //New dimensions of array
@@ -1265,14 +1264,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                     //</editor-fold>
 
-
-                    //Debugging
-                    decodedDataFrame[0]=1;
-                    decodedDataFrame[1]='I';
-                    decodedDataFrame[2]=2;
-                    decodedDataFrame[3]='T';
-                    decodedDataFrame[4]=3;
-                    decodedDataFrame[5]='A';
 
                     //</editor-fold>
 
