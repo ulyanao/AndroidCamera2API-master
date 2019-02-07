@@ -89,8 +89,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int FLASH_TIME = 500;
     private static final int TIME_OUT_LENGTH = 5000;
 
-    //Identifier for the intent
-    public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
 
     //Callback of camera device
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
