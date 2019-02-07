@@ -7,18 +7,36 @@
     android:layout_height="match_parent"
     tools:context=".DisplayMessageActivity">
 
-    <!-- A texture view is set up to display the received message  -->
-    <TextView
-        android:id="@+id/textView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:text="TextView"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+
+    <TableLayout
+        android:id="@+id/table_layout_table"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:isScrollContainer="true"
+        android:padding="10dip"
+        android:stretchColumns="*"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+
+        <TableRow
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:layout_column="0"
+                android:text="Date"
+                android:layout_margin="10dip" />
+            <TextView
+                android:layout_column="1"
+                android:text="Message"
+                android:layout_margin="10dip" />
+
+
+
+        </TableRow>
+
+
+
+    </TableLayout>
+
+
 </android.support.constraint.ConstraintLayout>

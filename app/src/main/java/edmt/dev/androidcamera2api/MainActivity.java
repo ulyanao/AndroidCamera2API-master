@@ -30,7 +30,10 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
+
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -83,6 +86,8 @@ public class MainActivity extends AppCompatActivity {
 
     //An ID to keep track of the current timer task
     private int TimerID = 0;
+    private static final int FLASH_TIME = 500;
+    private static final int TIME_OUT_LENGTH = 5000;
 
     //Identifier for the intent
     public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
@@ -182,6 +187,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 } else {
                     //Started
+                    ThreadManager.getInstance().createmDecoderThreadPool(); //Starts the executor again after it was shutdown
                     btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
                     btnCapture.setText(BUTTON_STRING_ON);
 
@@ -189,7 +195,7 @@ public class MainActivity extends AppCompatActivity {
 
                     updatePreview();
 
-                    new Timer().schedule(new StopFlashTask(TimerID),2000);
+                    new Timer().schedule(new StopFlashTask(TimerID),FLASH_TIME);
 
                 }
                 btnCapture.setClickable(true);  //let the user click again
@@ -353,7 +359,7 @@ public class MainActivity extends AppCompatActivity {
                         //Pass the image data to the worker thread for further processing
                         try {
                             //Accessing the thread pool and sending the received image data to a worker thread
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcesingData(data.clone()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data.clone()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -467,7 +473,7 @@ public class MainActivity extends AppCompatActivity {
 
                 //Starts a new timer to check timeout for decoding
                 TimerID++;
-                new Timer().schedule(new DecodingTimeOutTask(TimerID),5000);
+                new Timer().schedule(new DecodingTimeOutTask(TimerID),TIME_OUT_LENGTH);
 
                 runOnUiThread(new Runnable() {
                     @Override
@@ -526,8 +532,13 @@ public class MainActivity extends AppCompatActivity {
                 for(int i=0; i<imageData.dataStream.size();i++) {
                     message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
                 }
-                //Add an identification to the intent
-                intent.putExtra(EXTRA_MESSAGE,message);
+
+                Calendar c = Calendar.getInstance();
+                SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+                String datetime = dateFormat.format(c.getTime());
+
+                //Add data to storage manager
+                StorageManager.getInstance().addData(datetime, message);
 
                 //Finally reset the data, to be ready for a new communication
                 imageData.dataStream.clear();
@@ -574,11 +585,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class RunnableProcesingData implements Runnable {
+    private class RunnableProcessingData implements Runnable {
         //Variables
         byte[] data;
 
-        RunnableProcesingData(byte[] data) {
+        RunnableProcessingData(byte[] data) {
             //Initialization
             this.data = data;
         }
@@ -717,7 +728,7 @@ public class MainActivity extends AppCompatActivity {
             }
             //</editor-fold>
             //</editor-fold>
-
+            consecutiveStripesHighestAll=MINIMUM_CONSECUTIVE_STRIPES;
             //Check if ROI found otherwise discard frame
             if(consecutiveStripesHighestAll>=MINIMUM_CONSECUTIVE_STRIPES) {
                 //New dimensions of array
@@ -1253,6 +1264,15 @@ public class MainActivity extends AppCompatActivity {
                         decodedDataFrame[positionDecodedData-1] = 0;
                     }
                     //</editor-fold>
+
+
+                    //Debugging
+                    decodedDataFrame[0]=1;
+                    decodedDataFrame[1]='I';
+                    decodedDataFrame[2]=2;
+                    decodedDataFrame[3]='T';
+                    decodedDataFrame[4]=3;
+                    decodedDataFrame[5]='A';
 
                     //</editor-fold>
 
