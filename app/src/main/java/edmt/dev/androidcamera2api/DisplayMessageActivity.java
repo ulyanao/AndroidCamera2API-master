@@ -88,7 +88,10 @@ public class DisplayMessageActivity extends AppCompatActivity {
             public void onClick(View view) {
 
                 //set up the file path
-                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+savedDates.get(savedDates.size()-1)+".txt");
+                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"empty"+".txt");
+                if(savedDates.size()>0) {
+                    file01 = new File(Environment.getExternalStorageDirectory() + "/"+savedDates.get(savedDates.size()-1)+".txt");
+                }
                 //Stream of text file
                 FileWriter fileWriter01 = null;
                 try {

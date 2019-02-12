@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     //The user interface variables
     private TextureView textureView;
     private Button btnCapture;
+    private Button btnData;
 
     //Predefined styles for the button
     private final int BUTTON_COLOR_ON = Color.RED;
@@ -152,6 +153,7 @@ public class MainActivity extends AppCompatActivity {
         textureView.setSurfaceTextureListener(textureListener);
         //Get Button object
         btnCapture = (Button) findViewById(R.id.btnCapture);
+        btnData = (Button) findViewById(R.id.btnData);
         //Opens Camera Manager
         manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -203,6 +205,20 @@ public class MainActivity extends AppCompatActivity {
 
                 }
                 btnCapture.setClickable(true);  //let the user click again
+            }
+        });
+        btnData.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //Stop everything by using the stop button function
+                //Enable recording mode to start stop function when performing a click
+                recordingMode=true;
+                //Perform the click
+                btnCapture.performClick();
+
+                //set up an intent to send the message to the new activity
+                Intent intent = new Intent(MainActivity.this, DisplayMessageActivity.class);
+                startActivity(intent);
             }
         });
     }
