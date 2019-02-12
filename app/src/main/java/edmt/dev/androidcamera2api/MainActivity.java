@@ -23,7 +23,6 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
@@ -31,8 +30,13 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
+
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import static java.lang.Math.abs;
 
@@ -59,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     //Camera variables
+    private CameraManager manager;
     private String cameraId;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSessions;
@@ -75,22 +80,27 @@ public class MainActivity extends AppCompatActivity {
     //The object containing the image data and the variables that are accessed across multiple threads
     private final ImageData imageData = new ImageData();
     //The Boolean to check if the recording mode is on or off
-    public boolean recordingData;
+    public boolean recordingData = false;
+    //The Boolean to track the button status
+    public boolean recordingMode = recordingData;
     //through and good put
     private long startTimePut;
     private long throughPut;
     private long goodPut;
     private int counterPut = 0;
 
-    //Identifier for the intent
-    public static final String EXTRA_MESSAGE = "com.example.androidCamera2API-master.MESSAGE";
+    //An ID to keep track of the current timer task
+    private int TimerID = 0;
+    private static final int FLASH_TIME = 500;
+    private static final int TIME_OUT_LENGTH = 5000;
+
 
     //Callback of camera device
     CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             cameraDevice = camera;
-            setUpCamera();
+            setUpImageReader();
         }
 
         @Override
@@ -101,7 +111,6 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onError(@NonNull CameraDevice cameraDevice, int i) {
             cameraDevice.close();
-            cameraDevice=null;
         }
     };
 
@@ -139,28 +148,40 @@ public class MainActivity extends AppCompatActivity {
         textureView = (TextureView)findViewById(R.id.textureView);
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
+        //The surface is linked to the listener, therefore the listener is called and the openCamera() method is called when onCreate() is finished executing
         textureView.setSurfaceTextureListener(textureListener);
         //Get Button object
         btnCapture = (Button) findViewById(R.id.btnCapture);
+        //Opens Camera Manager
+        manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
+        try {
+            //Gets the ID
+            cameraId = manager.getCameraIdList()[0];
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
         //Set up listener and handler of button click
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                btnCapture.setClickable(false);     //if clicked disable until proceeded
-                recordingData = !recordingData;     //first disable recording data to stop capturing frames
-                synchronized (imageData) {          //second if have been recording, stop frames from processing more data; all thread save
-                    if (!recordingData) {
+                btnCapture.setClickable(false);     //If clicked disable until proceeded
+                TimerID++;   //To hinder executing timer tasks from executing there tasks
+                recordingMode = !recordingMode;   //Save the state that the recordingData should get afterwards
+                recordingData = false;     //Disable recording data to stop capturing frames as quickly as possible
+                synchronized (imageData) {          //Second if have been recording, stop frames from processing more data; all thread save
+                    if (!recordingMode) {
                         imageData.communicationFinishedCounter = imageData.COMMUNICATION_FINISHED_PARAMETER;
                     }
                 }
                 //Now distinguish between start and stopped
-                if(recordingData) {
-                    startTimePut = System.nanoTime();
-                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
-                    btnCapture.setText(BUTTON_STRING_ON);
-                } else {
+                if(!recordingMode) {
+                    //Stopped
+                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,CaptureRequest.FLASH_MODE_OFF);
+                    updatePreview();
                     btnCapture.setBackgroundColor(BUTTON_COLOR_OFF);
                     btnCapture.setText(BUTTON_STRING_OFF);
+                    //Shutdown all left tasks
+                    ThreadManager.getInstance().getmDecoderThreadPool().shutdownNow();
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
                     }
                     synchronized (imageData) {  //if all done clear all saved data
@@ -168,6 +189,18 @@ public class MainActivity extends AppCompatActivity {
                         imageData.communicationFinishedCounter = 0;
                         counterPut = 0;
                     }
+                } else {
+                    //Started
+                    ThreadManager.getInstance().createmDecoderThreadPool(); //Starts the executor again after it was shutdown
+                    btnCapture.setBackgroundColor(BUTTON_COLOR_ON); //change color
+                    btnCapture.setText(BUTTON_STRING_ON);
+
+                    captureRequestBuilder.set(CaptureRequest.FLASH_MODE,CaptureRequest.FLASH_MODE_TORCH);
+
+                    updatePreview();
+
+                    new Timer().schedule(new StopFlashTask(TimerID),FLASH_TIME);
+
                 }
                 btnCapture.setClickable(true);  //let the user click again
             }
@@ -177,9 +210,9 @@ public class MainActivity extends AppCompatActivity {
 
     //<editor-fold desc="Main methods">
     /**
-     * Creates the camera preview
+     * Creates the capture session with the linked preview surface and the linked image reader
      */
-    private void createCameraPreview() {
+    private void setUpCaptureSession() {
         try{
             //This is to create the surface of the preview texture field
             SurfaceTexture texture = textureView.getSurfaceTexture();
@@ -255,14 +288,9 @@ public class MainActivity extends AppCompatActivity {
      * Opens the camera, first initialization
      */
     private void openCamera() {
-        //Access camera manager
-        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try{
-            //Get Camera ID
-            cameraId = manager.getCameraIdList()[0];
             //Get characteristics of camera
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-
 
             //Access permission for camera from the android system
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
@@ -278,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            //This calls the setUpCamera method to set up the camera parameters
+            //This calls the setUpImageReader method to set up the camera parameters
             manager.openCamera(cameraId,stateCallback,null);
 
         } catch (CameraAccessException e) {
@@ -287,11 +315,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Setup of the camera
+     * Setup of the image reader
      */
-    private void setUpCamera() {
-        //Access camera manager
-        CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
+    private void setUpImageReader() {
         try{
             //Get characteristics of camera from manager
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -316,8 +342,6 @@ public class MainActivity extends AppCompatActivity {
             }
             //Initialize the image reader with the desired width, height, format and image buffer length
             imageReader = ImageReader.newInstance(width, height,ImageFormat.YUV_420_888,5);
-            //Disable the recording mode
-            recordingData = false;
 
             //<editor-fold desc="Listener of image reader">
             //Listener is set up by the image reader
@@ -339,7 +363,7 @@ public class MainActivity extends AppCompatActivity {
                         //Pass the image data to the worker thread for further processing
                         try {
                             //Accessing the thread pool and sending the received image data to a worker thread
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcesingData(data.clone()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data.clone()));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -354,8 +378,8 @@ public class MainActivity extends AppCompatActivity {
             //Image reader is linked to the listener
             imageReader.setOnImageAvailableListener(readerListener,mBackgroundHandler);
 
-            //Next step is the setup of the preview
-            createCameraPreview();
+            //Next step is the setup of the capture session
+            setUpCaptureSession();
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -418,13 +442,87 @@ public class MainActivity extends AppCompatActivity {
         //Assigns the new background thread to a handler, which is linked to the camera session
         mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
     }
+
+
     //</editor-fold>
 
     //<editor-fold desc="Threads">
+    /**
+     * The TimerTask to stop the flash and enable normal capture mode and recording mode
+     */
+    class StopFlashTask extends TimerTask {
+
+        //TimerID to keep track of tasks
+        private int IDOld;
+
+        StopFlashTask(int IDOld) {
+            this.IDOld = IDOld;
+        }
+
+        @Override
+        public void run() {
+            if(TimerID == IDOld){
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        btnCapture.setClickable(false);
+                    }
+                });
+
+                captureRequestBuilder.set(CaptureRequest.FLASH_MODE,CaptureRequest.FLASH_MODE_OFF);
+                updatePreview();
+
+                //Start decoding the information
+                startTimePut = System.nanoTime();
+                recordingData=true;
+
+                //Starts a new timer to check timeout for decoding
+                TimerID++;
+                new Timer().schedule(new DecodingTimeOutTask(TimerID),TIME_OUT_LENGTH);
+
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        btnCapture.setClickable(true);
+                    }
+                });
+            }
+            this.cancel();  //Closes this timer
+        }
+    }
+
+    /**
+     * The TimerTask to stop the decoding mode after timeout
+     */
+    class DecodingTimeOutTask extends TimerTask {
+
+        //TimerID to keep track of tasks
+        private int IDOld;
+
+        DecodingTimeOutTask(int IDOld) {
+            this.IDOld = IDOld;
+        }
+
+        @Override
+        public void run() {
+            if(TimerID == IDOld){
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        btnCapture.performClick();
+                        Toast.makeText(getApplicationContext(),"Timeout: Recording has stopped. You can start again!",Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+            this.cancel();  //Closes this timer
+        }
+    }
+
     private class ThreadSaveData extends Thread {
 
         public void run() {
             //wait until all threads of the thread pool are finished with executing
+            ThreadManager.getInstance().getmDecoderThreadPool().shutdownNow();
             while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {}
 
             //set up an intent to send the message to the new activity
@@ -439,9 +537,13 @@ public class MainActivity extends AppCompatActivity {
                 for(int i=0; i<imageData.dataStream.size();i++) {
                     message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
                 }
-                message=message+"; through (ms): " + throughPut + "; good (ms): " + goodPut;
-                //Add an identification to the intent
-                intent.putExtra(EXTRA_MESSAGE,message);
+
+                Calendar c = Calendar.getInstance();
+                SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yy HH:mm:ss");
+                String datetime = dateFormat.format(c.getTime());
+
+                //Add data to storage manager
+                StorageManager.getInstance().addData(datetime, message, ""+throughPut, ""+goodPut);
 
                 //Finally reset the data, to be ready for a new communication
                 imageData.dataStream.clear();
@@ -489,11 +591,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private class RunnableProcesingData implements Runnable {
+    private class RunnableProcessingData implements Runnable {
         //Variables
         byte[] data;
 
-        RunnableProcesingData(byte[] data) {
+        RunnableProcessingData(byte[] data) {
             //Initialization
             this.data = data;
         }
@@ -632,7 +734,6 @@ public class MainActivity extends AppCompatActivity {
             }
             //</editor-fold>
             //</editor-fold>
-
             //Check if ROI found otherwise discard frame
             if(consecutiveStripesHighestAll>=MINIMUM_CONSECUTIVE_STRIPES) {
                 //New dimensions of array
@@ -1169,6 +1270,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     //</editor-fold>
 
+
                     //</editor-fold>
 
                     synchronized (imageData) {
@@ -1191,10 +1293,10 @@ public class MainActivity extends AppCompatActivity {
                                     imageData.communicationFinishedCounter +=decodedDataFrame[n];
                                 }
 
-                                if(counterPut<3) {
+                                if(counterPut<imageData.MESSAGE_LENGTH) {
                                     counterPut++;
                                 }
-                                if(counterPut==3) {
+                                if(counterPut==imageData.MESSAGE_LENGTH) {
                                     counterPut++;
                                     throughPut = (System.nanoTime() - startTimePut) / 1000000;
                                 }
@@ -1204,6 +1306,8 @@ public class MainActivity extends AppCompatActivity {
                                     goodPut = (System.nanoTime()-startTimePut)/1000000;
                                     //Stop the recording of new frames
                                     recordingData = false;
+                                    //Set TimerID to hinder executing timer task
+                                    TimerID++;
 
                                     //Start a new thread to prepare the displaying of the message
                                     ThreadSaveData threadSaveData = new ThreadSaveData();

@@ -21,6 +21,8 @@ public class DisplayMessageActivity extends AppCompatActivity {
 
     private List<String> savedDates;
     private List<String> savedMessages;
+    private List<String> savedThrough;
+    private List<String> savedGood;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +36,8 @@ public class DisplayMessageActivity extends AppCompatActivity {
         //Get the message data
         savedDates = StorageManager.getInstance().returnListDates();
         savedMessages = StorageManager.getInstance().returnListMessages();
+        savedThrough = StorageManager.getInstance().returnListThroughPut();
+        savedGood = StorageManager.getInstance().returnListGoodPut();
 
 
         // Get TableLayout object in layout xml
@@ -63,6 +67,16 @@ public class DisplayMessageActivity extends AppCompatActivity {
             textView2.setText(savedMessages.get(i));
             tableRow.addView(textView2, 1);
 
+            // Add a TextView in the third column.
+            TextView textView3 = new TextView(context);
+            textView3.setText(savedThrough.get(i));
+            tableRow.addView(textView3, 2);
+
+            // Add a button in the fourth column
+            TextView textView4 = new TextView(context);
+            textView4.setText(savedGood.get(i));
+            tableRow.addView(textView4, 3);
+
             //Add the view
             tableLayout.addView(tableRow);
 
@@ -80,9 +94,11 @@ public class DisplayMessageActivity extends AppCompatActivity {
                 try {
                     fileWriter01 = new FileWriter(file01);
 
-                for(int i=0; i<savedDates.size() && i<savedMessages.size(); i++) {
-                    fileWriter01.write(savedDates.get(i)+","+savedMessages.get(i)+"\n");
-                }
+                    fileWriter01.write("Date"+",\t"+"Message"+",\t"+"TP [ms]"+",\t"+"GP [ms]"+"\n");
+
+                    for(int i=0; i<savedDates.size() && i<savedMessages.size(); i++) {
+                        fileWriter01.write(savedDates.get(i)+",\t"+savedMessages.get(i)+",\t"+savedThrough.get(i)+",\t"+savedGood.get(i)+"\n");
+                    }
 
 
                 } catch (IOException e) {

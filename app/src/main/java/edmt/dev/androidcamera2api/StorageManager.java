@@ -9,10 +9,14 @@ public class StorageManager {
     //Variables
     private List<String> savedMessages;
     private List<String> savedDates;
+    private List<String> savedThroughPut;
+    private List<String> savedGoodPut;
 
     private StorageManager() {
-        savedMessages = new ArrayList<>();
         savedDates = new ArrayList<>();
+        savedMessages = new ArrayList<>();
+        savedThroughPut = new ArrayList<>();
+        savedGoodPut = new ArrayList<>();
     }
 
 
@@ -22,9 +26,11 @@ public class StorageManager {
     }
 
     //Method to add Data
-    public void addData(String date, String message) {
-        savedMessages.add(message);
+    public void addData(String date, String message, String through, String good) {
         savedDates.add(date);
+        savedMessages.add(message);
+        savedThroughPut.add(through);
+        savedGoodPut.add(good);
     }
 
     //Method to get saved messages
@@ -35,6 +41,16 @@ public class StorageManager {
     //Method to get savedDates
     public List<String> returnListDates() {
         return savedDates;
+    }
+
+    //Method to get saved through
+    public List<String> returnListThroughPut() {
+        return savedThroughPut;
+    }
+
+    //Method to get saved good
+    public List<String> returnListGoodPut() {
+        return savedGoodPut;
     }
 
 
