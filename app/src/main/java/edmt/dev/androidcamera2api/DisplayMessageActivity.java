@@ -11,7 +11,6 @@ import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -94,9 +93,9 @@ public class DisplayMessageActivity extends AppCompatActivity {
             public void onClick(View view) {
 
                 //set up the file path
-                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"empty"+".txt");
+                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_Data_empty"+".txt");
                 if(savedDates.size()>0) {
-                    file01 = new File(Environment.getExternalStorageDirectory() + "/"+savedDates.get(savedDates.size()-1)+".txt");
+                    file01 = new File(Environment.getExternalStorageDirectory() + "/VLC_Data_"+savedDates.get(savedDates.size()-1)+".txt");
                 }
                 //Stream of text file
                 FileWriter fileWriter01 = null;

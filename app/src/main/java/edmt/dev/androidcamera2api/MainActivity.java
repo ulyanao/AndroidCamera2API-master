@@ -17,6 +17,7 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -30,7 +31,9 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -78,17 +81,10 @@ public class MainActivity extends AppCompatActivity {
     private Handler mBackgroundHandler;
     private HandlerThread mBackgroundThread;
 
-    //The object containing the image data and the variables that are accessed across multiple threads
-    private final ImageData imageData = new ImageData();
     //The Boolean to check if the recording mode is on or off
     public boolean recordingData = false;
     //The Boolean to track the button status
     public boolean recordingMode = recordingData;
-    //through and good put
-    private long startTimePut;
-    private long throughPut;
-    private long goodPut;
-    private int counterPut = 0;
 
     //An ID to keep track of the current timer task
     private int TimerID = 0;
@@ -170,9 +166,9 @@ public class MainActivity extends AppCompatActivity {
                 TimerID++;   //To hinder executing timer tasks from executing there tasks
                 recordingMode = !recordingMode;   //Save the state that the recordingData should get afterwards
                 recordingData = false;     //Disable recording data to stop capturing frames as quickly as possible
-                synchronized (imageData) {          //Second if have been recording, stop frames from processing more data; all thread save
+                synchronized (StorageManager.getInstance()) {          //Second if have been recording, stop frames from processing more data; all thread save
                     if (!recordingMode) {
-                        imageData.communicationFinishedCounter = imageData.COMMUNICATION_FINISHED_PARAMETER;
+                        StorageManager.getInstance().counterCommunicationFinished = StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER;
                     }
                 }
                 //Now distinguish between start and stopped
@@ -186,10 +182,8 @@ public class MainActivity extends AppCompatActivity {
                     ThreadManager.getInstance().getmDecoderThreadPool().shutdownNow();
                     while(ThreadManager.getInstance().getmDecoderThreadPool().getActiveCount() != 0) {      //care about sill executing threads, wait until all done
                     }
-                    synchronized (imageData) {  //if all done clear all saved data
-                        imageData.dataStream.clear();
-                        imageData.communicationFinishedCounter = 0;
-                        counterPut = 0;
+                    synchronized (StorageManager.getInstance()) {  //if all done clear all saved data
+                        StorageManager.getInstance().resetTempData();
                     }
                 } else {
                     //Started
@@ -370,6 +364,11 @@ public class MainActivity extends AppCompatActivity {
 
                     //Check if recording mode is on / the transmission has started
                     if (recordingData) {
+                        //Save Time
+                        StorageManager.getInstance().timeAcquireIdle.add((int) ((System.nanoTime()-StorageManager.getInstance().timeAcquireEnd)/ 1000000));
+                        long timeAcquireStart = System.nanoTime();
+                        StorageManager.getInstance().counterImages++;
+
                         //Initialize byte array to store the image data
                         byte[] data = new byte[image.getWidth() * image.getHeight()];
                         //Acquire the data of the y plane from the image
@@ -383,6 +382,8 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                        StorageManager.getInstance().timeAcquireEnd = System.nanoTime();
+                        StorageManager.getInstance().timeAcquireImage.add((int) ((StorageManager.getInstance().timeAcquireEnd-timeAcquireStart)/ 1000000));
                     }else{
                         //If recording mode is off, close the image immediately
                         image.close();
@@ -489,7 +490,7 @@ public class MainActivity extends AppCompatActivity {
                 updatePreview();
 
                 //Start decoding the information
-                startTimePut = System.nanoTime();
+                StorageManager.getInstance().timeStart = System.nanoTime();
                 recordingData=true;
 
                 //Starts a new timer to check timeout for decoding
@@ -547,11 +548,11 @@ public class MainActivity extends AppCompatActivity {
             String message = "";
 
             //Access the data
-            synchronized (imageData) {
+            synchronized (StorageManager.getInstance()) {
 
                 //Access the bytes of the dataStream list and save theses as characters to the message string
-                for(int i=0; i<imageData.dataStream.size();i++) {
-                    message = message + String.valueOf((char) (byte) imageData.dataStream.get(i));
+                for(int i=0; i<StorageManager.getInstance().dataStream.size();i++) {
+                    message = message + String.valueOf((char) (byte) StorageManager.getInstance().dataStream.get(i));
                 }
 
                 Calendar c = Calendar.getInstance();
@@ -559,12 +560,46 @@ public class MainActivity extends AppCompatActivity {
                 String datetime = dateFormat.format(c.getTime());
 
                 //Add data to storage manager
-                StorageManager.getInstance().addData(datetime, message, ""+throughPut, ""+goodPut);
+                StorageManager.getInstance().addData(datetime, message, ""+StorageManager.getInstance().timeThroughPut, ""+StorageManager.getInstance().timeGoodPut);
+
+                //set up the file path
+                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_aTime"+".txt");
+                //Stream of text file
+                FileWriter fileWriter01 = null;
+                try {
+                    fileWriter01 = new FileWriter(file01);
+
+                    fileWriter01.write("Tges:"+",\t"+StorageManager.getInstance().timeGoodPut+"\n");
+
+                    fileWriter01.write("Timg:"+",\t"+(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages)+"\n");
+
+                    fileWriter01.write("CounterIages:"+",\t"+(StorageManager.getInstance().counterImages)+"\n");
+
+                    fileWriter01.write("CounterThreadsStarted:"+",\t"+(StorageManager.getInstance().counterThreadsStarted)+"\n");
+
+                    fileWriter01.write("CounterThreadsFinished:"+",\t"+(StorageManager.getInstance().counterThreadsFinished)+"\n\n");
+
+                    for(int i=0; i<StorageManager.getInstance().timeAcquireImage.size() && i<StorageManager.getInstance().timeAcquireIdle.size(); i++) {
+                        fileWriter01.write(StorageManager.getInstance().timeAcquireImage.get(i)+",\t"+StorageManager.getInstance().timeAcquireIdle.get(i)+"\n");
+                    }
+
+
+                } catch (IOException e) {
+                    e.printStackTrace();
+
+                } finally {
+                    try {
+                        if (fileWriter01 != null) {
+                            fileWriter01.close();
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
 
                 //Finally reset the data, to be ready for a new communication
-                imageData.dataStream.clear();
-                imageData.communicationFinishedCounter = 0;
-                counterPut = 0;
+                StorageManager.getInstance().resetTempData();
             }
 
             //Activate the capture button
@@ -580,32 +615,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public class ImageData {
-        //Initialization of the variables
-        //The list where the bytes of the final message are stored
-        public List<Byte> dataStream;
-        //The variable which is used as a counter to check if the communication is finished
-        public int communicationFinishedCounter;
-        //The length of the message
-        public final int  MESSAGE_LENGTH;
-        //The parameter which is used to set to determine the end of the communication
-        public final int COMMUNICATION_FINISHED_PARAMETER;
 
-        ImageData() {
-            //Initialization of the list
-            dataStream = new ArrayList<>();
-            //Set the Counter to 0, since no data received yet
-            communicationFinishedCounter = 0;
-            //Set it to the length of the message in bytes
-            MESSAGE_LENGTH = 3;
-            //Set this counter
-            int buffer = 0;
-            for(int n=0;n<=MESSAGE_LENGTH;n++) {
-                buffer+=n;
-            }
-            COMMUNICATION_FINISHED_PARAMETER = buffer;
-        }
-    }
 
     private class RunnableProcessingData implements Runnable {
         //Variables
@@ -618,6 +628,10 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
+            //Count Threads
+            StorageManager.getInstance().counterThreadsStarted++;
+            long timeStart = System.nanoTime();
+
             //Initialization
             byte[] dataPlanes = this.data;
             int width = 4032;
@@ -1289,37 +1303,37 @@ public class MainActivity extends AppCompatActivity {
 
                     //</editor-fold>
 
-                    synchronized (imageData) {
+                    synchronized (StorageManager.getInstance()) {
                         //Only save data if the communication is not already finished
-                        if (imageData.communicationFinishedCounter != imageData.COMMUNICATION_FINISHED_PARAMETER) {
+                        if (StorageManager.getInstance().counterCommunicationFinished != StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER) {
 
                             //Check if the block number of the byte is within the range of the message length
                             //Check if the decoded data is not null
-                            for(int n=0;decodedDataFrame[n] > 0 && decodedDataFrame[n+1]!=0 && decodedDataFrame[n] <= imageData.MESSAGE_LENGTH;n+=2) {
+                            for(int n=0;decodedDataFrame[n] > 0 && decodedDataFrame[n+1]!=0 && decodedDataFrame[n] <= StorageManager.getInstance().MESSAGE_LENGTH;n+=2) {
                                 //If the size of the list is too small, increase the size according to the block number
-                                while(imageData.dataStream.size()<decodedDataFrame[n]) {
-                                    imageData.dataStream.add((byte) 0);
+                                while(StorageManager.getInstance().dataStream.size()<decodedDataFrame[n]) {
+                                    StorageManager.getInstance().dataStream.add((byte) 0);
                                 }
 
                                 //Check if the same block has not already been detected
-                                if(imageData.dataStream.get(decodedDataFrame[n]-1) == 0) {
+                                if(StorageManager.getInstance().dataStream.get(decodedDataFrame[n]-1) == 0) {
                                     //Set the data to the position of the block number
-                                    imageData.dataStream.set(decodedDataFrame[n]-1,decodedDataFrame[n+1]);
+                                    StorageManager.getInstance().dataStream.set(decodedDataFrame[n]-1,decodedDataFrame[n+1]);
                                     //Add the block number to the counter
-                                    imageData.communicationFinishedCounter +=decodedDataFrame[n];
+                                    StorageManager.getInstance().counterCommunicationFinished +=decodedDataFrame[n];
                                 }
 
-                                if(counterPut<imageData.MESSAGE_LENGTH) {
-                                    counterPut++;
+                                if(StorageManager.getInstance().counterPut<StorageManager.getInstance().MESSAGE_LENGTH) {
+                                    StorageManager.getInstance().counterPut++;
                                 }
-                                if(counterPut==imageData.MESSAGE_LENGTH) {
-                                    counterPut++;
-                                    throughPut = (System.nanoTime() - startTimePut) / 1000000;
+                                if(StorageManager.getInstance().counterPut==StorageManager.getInstance().MESSAGE_LENGTH) {
+                                    StorageManager.getInstance().counterPut++;
+                                    StorageManager.getInstance().timeThroughPut = (System.nanoTime() - StorageManager.getInstance().timeStart) / 1000000;
                                 }
 
                                 //After every block, check if the message is completed
-                                if (imageData.communicationFinishedCounter == imageData.COMMUNICATION_FINISHED_PARAMETER) {
-                                    goodPut = (System.nanoTime()-startTimePut)/1000000;
+                                if (StorageManager.getInstance().counterCommunicationFinished == StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER) {
+                                    StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStart)/1000000;
                                     //Stop the recording of new frames
                                     recordingData = false;
                                     //Set TimerID to hinder executing timer task
@@ -1349,6 +1363,9 @@ public class MainActivity extends AppCompatActivity {
 
                 }
             }
+            //Count Threads Finished
+            StorageManager.getInstance().counterThreadsFinished++;
+            long timeEnd = System.nanoTime();
         }
         //The mapping for 4Bit6Bit
         private byte decode4Bit6Bit(byte dataCoded) {
