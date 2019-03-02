@@ -52,34 +52,40 @@ public class DisplayMessageActivity extends AppCompatActivity {
             // Create a new table row.
             TableRow tableRow = new TableRow(context);
 
+            //Get resource for conversion from pix to dip
+            float d = context.getResources().getDisplayMetrics().density;
+
             // Set new table row layout parameters.
-            TableRow.LayoutParams layoutParams = new TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT);
-            layoutParams.setMargins(10, 10, 10, 10);
-            tableRow.setLayoutParams(layoutParams);
+            TableLayout.LayoutParams tableRowParams = new TableLayout.LayoutParams(TableLayout.LayoutParams.WRAP_CONTENT,TableLayout.LayoutParams.WRAP_CONTENT);
+            tableRow.setLayoutParams(tableRowParams);
+
+            //Set params for text views
+            TableRow.LayoutParams params = new TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT,TableRow.LayoutParams.WRAP_CONTENT);
+            params.setMargins((int)(10*d),(int) (1*d),(int)(10*d),(int)(1*d));
+
 
             // Add a TextView in the first column.
             TextView textView = new TextView(context);
             textView.setText(savedDates.get(i));
-            tableRow.addView(textView, 0);
+            tableRow.addView(textView, 0, params);
 
             // Add a button in the second column
             TextView textView2 = new TextView(context);
             textView2.setText(savedMessages.get(i));
-            tableRow.addView(textView2, 1);
+            tableRow.addView(textView2, 1, params);
 
             // Add a TextView in the third column.
             TextView textView3 = new TextView(context);
             textView3.setText(savedThrough.get(i));
-            tableRow.addView(textView3, 2);
+            tableRow.addView(textView3,2, params);
 
             // Add a button in the fourth column
             TextView textView4 = new TextView(context);
             textView4.setText(savedGood.get(i));
-            tableRow.addView(textView4, 3);
+            tableRow.addView(textView4, 3, params);
 
             //Add the view
             tableLayout.addView(tableRow);
-
         }
 
         //Set up listener and handler of button click

@@ -17,45 +17,64 @@
         android:text="Print the table" />
 
 
-    <TableLayout
-        android:id="@+id/table_layout_table"
+    <LinearLayout
         android:layout_below="@id/buttonPrint"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:isScrollContainer="true"
-        android:padding="10dip"
-        android:stretchColumns="*"
-        xmlns:android="http://schemas.android.com/apk/res/android">
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical" >
+        <ScrollView
+            android:id="@+id/layout"
+            android:layout_height="match_parent"
+            android:scrollbars="horizontal|vertical"
+            android:layout_width="match_parent"
+            android:layout_marginTop="5dip"
+            android:scrollbarStyle="outsideInset"
+            android:fillViewport="true">
 
-        <TableRow
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            <HorizontalScrollView
+                android:id="@+id/horizontalView"
+                android:layout_height="wrap_content"
+                android:scrollbars="horizontal|vertical"
+                android:layout_width="wrap_content"
+                android:layout_marginTop="5dip">
 
-            <TextView
-                android:layout_column="0"
-                android:text="Date"
-                android:layout_margin="0dip" />
-            <TextView
-                android:layout_column="1"
-                android:text="Message"
-                android:layout_margin="0dip" />
+                <TableLayout
+                    android:id="@+id/table_layout_table"
+                    android:layout_height="wrap_content"
+                    android:layout_width="wrap_content"
+                    android:stretchColumns="*"
+                    xmlns:android="http://schemas.android.com/apk/res/android">
 
-            <TextView
-                android:layout_column="2"
-                android:text="TP [ms]"
-                android:layout_margin="0dip" />
-            <TextView
-                android:layout_column="3"
-                android:text="GP [ms]"
-                android:layout_margin="0dip" />
+                    <TableRow
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content">
+
+                        <TextView
+                            android:layout_column="0"
+                            android:text="Date"
+                            android:layout_margin="10dip" />
+                        <TextView
+                            android:layout_column="1"
+                            android:text="Message"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="2"
+                            android:text="Throughput [ms]"
+                            android:layout_margin="10dip" />
+                        <TextView
+                            android:layout_column="3"
+                            android:text="Goodput [ms]"
+                            android:layout_margin="10dip" />
 
 
 
-        </TableRow>
+                    </TableRow>
 
-
-
-    </TableLayout>
-
+                </TableLayout>
+            </HorizontalScrollView>
+        </ScrollView>
+    </LinearLayout>
 
 </RelativeLayout>
+
