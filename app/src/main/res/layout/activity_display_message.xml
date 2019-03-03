@@ -68,6 +68,47 @@
                             android:layout_margin="10dip" />
 
 
+                        <TextView
+                            android:layout_column="4"
+                            android:text="Time/Picture [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="5"
+                            android:text="Thread [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="6"
+                            android:text="ROI [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="7"
+                            android:text="1Dim [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="8"
+                            android:text="Thresh [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="9"
+                            android:text="Down [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="10"
+                            android:text="Decode [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="11"
+                            android:text="Saving [ms]"
+                            android:layout_margin="10dip" />
+
+
 
                     </TableRow>
 

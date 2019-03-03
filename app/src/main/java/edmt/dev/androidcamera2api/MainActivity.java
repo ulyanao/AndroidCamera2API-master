@@ -555,11 +555,32 @@ public class MainActivity extends AppCompatActivity {
                 SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yy HH:mm:ss");
                 String datetime = dateFormat.format(c.getTime());
 
-                //Add data to storage manager
-                StorageManager.getInstance().addData(datetime, message, ""+StorageManager.getInstance().timeThroughPut, ""+StorageManager.getInstance().timeGoodPut);
+                //Prepare String with main data
+                String[] savedDataBuffer = new String[StorageManager.getInstance().getData().size()];
+                savedDataBuffer[0] = datetime;
+                savedDataBuffer[1] = message;
+                savedDataBuffer[2] = String.valueOf(StorageManager.getInstance().timeThroughPut);
+                savedDataBuffer[3] = String.valueOf(StorageManager.getInstance().timeGoodPut);
+                savedDataBuffer[4] = String.valueOf(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages);
 
-                //set up the file path
-                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_aTime"+".txt");
+                //Calculate Average and add the time data to string
+                List<ArrayList<Integer>> timeList = StorageManager.getInstance().getTimeLists();
+                long[] averageTimeBuffer = new long[timeList.size()];
+
+                for (int i=0;i<averageTimeBuffer.length;i++) {
+                    for (int n=0;n<timeList.get(i).size();n++) {
+                        averageTimeBuffer[i]+=timeList.get(i).get(n);
+                    }
+                    averageTimeBuffer[i]/=timeList.get(i).size();
+                    savedDataBuffer[i+5] = String.valueOf(averageTimeBuffer[i]/10.0);
+                }
+
+                //Add data to storage manager
+                StorageManager.getInstance().setData(savedDataBuffer);
+
+
+                /*//set up the file path
+                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_Time_"+datetime+".txt");
                 //Stream of text file
                 FileWriter fileWriter01 = null;
                 try {
@@ -598,7 +619,7 @@ public class MainActivity extends AppCompatActivity {
                         e.printStackTrace();
                     }
                 }
-
+                */
 
                 //Finally reset the data, to be ready for a new communication
                 StorageManager.getInstance().resetTempData();
@@ -779,7 +800,7 @@ public class MainActivity extends AppCompatActivity {
             //Check if ROI found otherwise discard frame
             if(consecutiveStripesHighestAll<MINIMUM_CONSECUTIVE_STRIPES) {
                 //Save the time
-                StorageManager.getInstance().setTime((int) (timeROI-timeStart)/TIME_FORMAT, -10,-10,-10,-10,-10,-10);
+                //StorageManager.getInstance().setTimeLists((int) (timeROI-timeStart)/TIME_FORMAT, -10,-10,-10,-10,-10,-10);
                 return;
             }
 
@@ -909,20 +930,6 @@ public class MainActivity extends AppCompatActivity {
 
             //Save processing time
             timeThresh = System.nanoTime();
-
-            //Check if at least as many intervals as stripes according to protocol, otherwise do not process further and return
-            if (threshValues.size()<MINIMUM_CONSECUTIVE_STRIPES) {
-                //Save the time
-                StorageManager.getInstance().setTime(
-                        (int)(timeThresh-timeStart)/TIME_FORMAT,
-                        (int)(timeROI-timeStart)/TIME_FORMAT,
-                        (int)(timeDim-timeROI)/TIME_FORMAT,
-                        (int)(timeThresh-timeDim)/TIME_FORMAT,
-                        -10,
-                        -10,
-                        -10);
-                return;
-            }
 
             //<editor-fold desc="Downsampling">
             //Variables
@@ -1405,14 +1412,14 @@ public class MainActivity extends AppCompatActivity {
             timeSync = System.nanoTime();
 
             //Save the time
-            StorageManager.getInstance().setTime(
+            StorageManager.getInstance().setTimeLists(new int[] {
                     (int)(timeSync-timeStart)/TIME_FORMAT,
                     (int)(timeROI-timeStart)/TIME_FORMAT,
                     (int)(timeDim-timeROI)/TIME_FORMAT,
                     (int)(timeThresh-timeDim)/TIME_FORMAT,
                     (int)(timeDown-timeThresh)/TIME_FORMAT,
                     (int)(timeDecoding-timeDown)/TIME_FORMAT,
-                    (int)(timeSync-timeDecoding)/TIME_FORMAT);
+                    (int)(timeSync-timeDecoding)/TIME_FORMAT});
         }
         //The mapping for 4Bit6Bit
         private byte decode4Bit6Bit(byte dataCoded) {

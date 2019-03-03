@@ -7,12 +7,11 @@ public class StorageManager {
     //Static instance of the Storage Manager
     private static StorageManager sInstance;
 
-    //Variables
-    private List<String> savedMessages = new ArrayList<>();
-    private List<String> savedDates  = new ArrayList<>();
-    private List<String> savedThroughPut  = new ArrayList<>();
-    private List<String> savedGoodPut  = new ArrayList<>();
+    //Long Time Data
+    //List saves every table row
+    private List<ArrayList<String>> savedData = new ArrayList<>();
 
+    //Temp Data
     //The list where the bytes of the final message are stored
     public List<Byte> dataStream = new ArrayList<>();
     //The variable which is used as a counter to check if the communication is finished
@@ -29,15 +28,8 @@ public class StorageManager {
     public long timeGoodPut;
     public int counterPut = 0;
     public int counterImages = 0;
-    //Processing time
-    public List<Integer> timeAll = new ArrayList<>();
-    public List<Integer> timeROI = new ArrayList<>();
-    public List<Integer> timeDim = new ArrayList<>();
-    public List<Integer> timeThresh = new ArrayList<>();
-    public List<Integer> timeDown = new ArrayList<>();
-    public List<Integer> timeDecoding = new ArrayList<>();
-    public List<Integer> timeSync = new ArrayList<>();
-
+    //Processing time List
+    private List<ArrayList<Integer>> timeData = new ArrayList<>();
 
     private StorageManager() {
         //Set the finished parameter according to the message length
@@ -46,6 +38,16 @@ public class StorageManager {
             buffer+=n;
         }
         COMMUNICATION_FINISHED_PARAMETER = buffer;
+
+        //Adds the initial Integer Lists to the time list
+        for(int i=0;i<7;i++) {
+            timeData.add(new ArrayList<Integer>());
+        }
+
+        //Adds the initial String lists to the savedData list
+        for(int i=0;i<5+timeData.size();i++) {
+            savedData.add(new ArrayList<String>());
+        }
     }
 
 
@@ -58,42 +60,24 @@ public class StorageManager {
     }
 
     //Method to add Data
-    public void addData(String date, String message, String through, String good) {
-        savedDates.add(date);
-        savedMessages.add(message);
-        savedThroughPut.add(through);
-        savedGoodPut.add(good);
+    public void setData(String[] data) {
+        for(int i = 0; i < data.length && i < savedData.size();i++) {
+            savedData.get(i).add(data[i]);
+        }
     }
 
-    //Method to get saved messages
-    public List<String> returnListMessages() {
-        return savedMessages;
-    }
-
-    //Method to get savedDates
-    public List<String> returnListDates() {
-        return savedDates;
-    }
-
-    //Method to get saved through
-    public List<String> returnListThroughPut() {
-        return savedThroughPut;
-    }
-
-    //Method to get saved good
-    public List<String> returnListGoodPut() {
-        return savedGoodPut;
+    public List<ArrayList<String>> getData() {
+        return savedData;
     }
 
     public void resetTempData() {
         dataStream.clear();
-        timeAll.clear();
-        timeROI.clear();
-        timeDim.clear();
-        timeThresh.clear();
-        timeDown.clear();
-        timeDecoding.clear();
-        timeSync.clear();
+
+        //Empty the time lists
+        for (ArrayList<Integer> data :timeData
+             ) {
+            data.clear();
+        }
 
         counterCommunicationFinished = 0;
         counterPut=0;
@@ -101,14 +85,14 @@ public class StorageManager {
 
     }
 
-    public void setTime(Integer all, Integer roi, Integer dim, Integer thresh, Integer down, Integer decoding, Integer sync) {
-        timeAll.add(all);
-        timeROI.add(roi);
-        timeDim.add(dim);
-        timeThresh.add(thresh);
-        timeDown.add(down);
-        timeDecoding.add(decoding);
-        timeSync.add(sync);
+    public void setTimeLists(int[] data) {
+        for(int i = 0; i < data.length && i < timeData.size();i++) {
+            timeData.get(i).add(data[i]);
+        }
+    }
+
+    public List<ArrayList<Integer>> getTimeLists() {
+        return timeData;
     }
 
 

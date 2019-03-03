@@ -14,6 +14,7 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 public class DisplayMessageActivity extends AppCompatActivity {
@@ -28,11 +29,7 @@ public class DisplayMessageActivity extends AppCompatActivity {
         Button buttonPrint = (Button) findViewById(R.id.buttonPrint);
 
         //Get the message data
-        final List<String>savedDates = StorageManager.getInstance().returnListDates();
-        final List<String>savedMessages = StorageManager.getInstance().returnListMessages();
-        final List<String>savedThrough = StorageManager.getInstance().returnListThroughPut();
-        final List<String>savedGood = StorageManager.getInstance().returnListGoodPut();
-
+        final List<ArrayList<String>> savedData = StorageManager.getInstance().getData();
 
         // Get TableLayout object in layout xml
         final TableLayout tableLayout = (TableLayout) findViewById(R.id.table_layout_table);
@@ -40,8 +37,7 @@ public class DisplayMessageActivity extends AppCompatActivity {
         //Get context
         Context context = getApplicationContext();
 
-
-        for (int i = 0; i < savedMessages.size() && i < savedDates.size(); i++) {
+        for (int i = 0; i < savedData.get(0).size(); i++) {
 
             // Create a new table row.
             TableRow tableRow = new TableRow(context);
@@ -57,26 +53,12 @@ public class DisplayMessageActivity extends AppCompatActivity {
             TableRow.LayoutParams params = new TableRow.LayoutParams(TableRow.LayoutParams.WRAP_CONTENT,TableRow.LayoutParams.WRAP_CONTENT);
             params.setMargins((int)(10*d),(int) (1*d),(int)(10*d),(int)(1*d));
 
-
-            // Add a TextView in the first column.
-            TextView textView = new TextView(context);
-            textView.setText(savedDates.get(i));
-            tableRow.addView(textView, 0, params);
-
-            // Add a button in the second column
-            TextView textView2 = new TextView(context);
-            textView2.setText(savedMessages.get(i));
-            tableRow.addView(textView2, 1, params);
-
-            // Add a TextView in the third column.
-            TextView textView3 = new TextView(context);
-            textView3.setText(savedThrough.get(i));
-            tableRow.addView(textView3,2, params);
-
-            // Add a button in the fourth column
-            TextView textView4 = new TextView(context);
-            textView4.setText(savedGood.get(i));
-            tableRow.addView(textView4, 3, params);
+            for(int n=0; n<savedData.size(); n++) {
+                // Add a TextView in the n column.
+                TextView textView = new TextView(context);
+                textView.setText(savedData.get(n).get(i));
+                tableRow.addView(textView, n, params);
+            }
 
             //Add the view
             tableLayout.addView(tableRow);
@@ -89,8 +71,8 @@ public class DisplayMessageActivity extends AppCompatActivity {
 
                 //set up the file path
                 File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_Data_empty"+".txt");
-                if(savedDates.size()>0) {
-                    file01 = new File(Environment.getExternalStorageDirectory() + "/VLC_Data_"+savedDates.get(savedDates.size()-1)+".txt");
+                if(savedData.get(0).size()>0) {
+                    file01 = new File(Environment.getExternalStorageDirectory() + "/VLC_Data_"+savedData.get(0).get(savedData.get(0).size()-1)+".txt");
                 }
                 //Stream of text file
                 FileWriter fileWriter01 = null;
@@ -99,8 +81,11 @@ public class DisplayMessageActivity extends AppCompatActivity {
 
                     fileWriter01.write("Date"+",\t"+"Message"+",\t"+"TP [ms]"+",\t"+"GP [ms]"+"\n");
 
-                    for(int i=0; i<savedDates.size() && i<savedMessages.size(); i++) {
-                        fileWriter01.write(savedDates.get(i)+",\t"+savedMessages.get(i)+",\t"+savedThrough.get(i)+",\t"+savedGood.get(i)+"\n");
+                    for(int i=0; i<savedData.get(0).size(); i++) {
+                        for(int n=0; n<savedData.size();n++) {
+                            fileWriter01.write(savedData.get(n).get(i)+"\t");
+                        }
+                        fileWriter01.write("\n");
                     }
 
 
