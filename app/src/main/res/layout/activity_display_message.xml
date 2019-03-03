@@ -74,7 +74,7 @@
 
                         <TextView
                             android:layout_column="5"
-                            android:text="Average Thread Processing: [ms]"
+                            android:text="Average Thread [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView

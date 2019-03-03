@@ -648,7 +648,7 @@ public class MainActivity extends AppCompatActivity {
 
             //Constants
             //The step size for the rows
-            int STEP_ROI_ROW = 300;
+            int STEP_ROI_ROW = 200;
             //The step size for the pixels in a row or respectively the columns
             int STEP_ROI_PIXEL = 8;
             //The to exceeding difference to count a difference in the light intensity as a stripe
