@@ -79,7 +79,7 @@ public class DisplayMessageActivity extends AppCompatActivity {
                 try {
                     fileWriter01 = new FileWriter(file01);
 
-                    fileWriter01.write("Date"+",\t"+"Message"+",\t"+"TP [ms]"+",\t"+"GP [ms]"+"\n");
+                    fileWriter01.write("Date"+"\t"+"Message"+"\t"+"TP [ms]"+"\t"+"GP [ms]"+"\t"+"Time/Image"+"\t"+"Thread"+"\t"+"..."+"\t"+"..."+"\n");
 
                     for(int i=0; i<savedData.get(0).size(); i++) {
                         for(int n=0; n<savedData.size();n++) {

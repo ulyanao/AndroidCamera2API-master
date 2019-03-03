@@ -578,49 +578,6 @@ public class MainActivity extends AppCompatActivity {
                 //Add data to storage manager
                 StorageManager.getInstance().setData(savedDataBuffer);
 
-
-                /*//set up the file path
-                File file01 = new File(Environment.getExternalStorageDirectory() + "/"+"VLC_Time_"+datetime+".txt");
-                //Stream of text file
-                FileWriter fileWriter01 = null;
-                try {
-                    fileWriter01 = new FileWriter(file01);
-
-                    fileWriter01.write("Tges:"+"\t"+StorageManager.getInstance().timeGoodPut+"\n");
-
-                    fileWriter01.write("Timg:"+"\t"+(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages)+"\n");
-
-                    fileWriter01.write("CounterImages:"+"\t"+(StorageManager.getInstance().counterImages)+"\n\n");
-
-                    fileWriter01.write("TimeThread"+"\t"+"TimeROI"+"\t"+"TimeDim"+"\t"+"TimeThresh"+"\t"+"TimeDown"+"\t"+"TimeDecoding"+"\t"+"TimeSync"+"\n");
-
-
-                    for(int i=0; i<StorageManager.getInstance().timeAll.size(); i++) {
-                        fileWriter01.write(
-                                StorageManager.getInstance().timeAll.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeROI.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeDim.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeThresh.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeDown.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeDecoding.get(i)/10.0+"\t"+
-                                StorageManager.getInstance().timeSync.get(i)/10.0+"\n");
-                    }
-
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-
-                } finally {
-                    try {
-                        if (fileWriter01 != null) {
-                            fileWriter01.close();
-                        }
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                }
-                */
-
                 //Finally reset the data, to be ready for a new communication
                 StorageManager.getInstance().resetTempData();
             }

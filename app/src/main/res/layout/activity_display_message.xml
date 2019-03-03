@@ -67,7 +67,6 @@
                             android:text="Goodput [ms]"
                             android:layout_margin="10dip" />
 
-
                         <TextView
                             android:layout_column="4"
                             android:text="Time/Picture [ms]"
@@ -75,7 +74,7 @@
 
                         <TextView
                             android:layout_column="5"
-                            android:text="Thread [ms]"
+                            android:text="Average Thread Processing: [ms]"
                             android:layout_margin="10dip" />
 
                         <TextView
