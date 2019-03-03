@@ -18,11 +18,6 @@ import java.util.List;
 
 public class DisplayMessageActivity extends AppCompatActivity {
 
-    private List<String> savedDates;
-    private List<String> savedMessages;
-    private List<String> savedThrough;
-    private List<String> savedGood;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -33,10 +28,10 @@ public class DisplayMessageActivity extends AppCompatActivity {
         Button buttonPrint = (Button) findViewById(R.id.buttonPrint);
 
         //Get the message data
-        savedDates = StorageManager.getInstance().returnListDates();
-        savedMessages = StorageManager.getInstance().returnListMessages();
-        savedThrough = StorageManager.getInstance().returnListThroughPut();
-        savedGood = StorageManager.getInstance().returnListGoodPut();
+        final List<String>savedDates = StorageManager.getInstance().returnListDates();
+        final List<String>savedMessages = StorageManager.getInstance().returnListMessages();
+        final List<String>savedThrough = StorageManager.getInstance().returnListThroughPut();
+        final List<String>savedGood = StorageManager.getInstance().returnListGoodPut();
 
 
         // Get TableLayout object in layout xml

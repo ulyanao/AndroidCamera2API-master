@@ -28,14 +28,15 @@ public class StorageManager {
     public long timeThroughPut;
     public long timeGoodPut;
     public int counterPut = 0;
-    //Processing time
-    public long timeAcquireEnd;
-    public List<Integer> timeAcquireImage = new ArrayList<>();
-    public List<Integer> timeAcquireIdle = new ArrayList<>();
-    //Counters
     public int counterImages = 0;
-    public int counterThreadsStarted = 0;
-    public int counterThreadsFinished =0;
+    //Processing time
+    public List<Integer> timeAll = new ArrayList<>();
+    public List<Integer> timeROI = new ArrayList<>();
+    public List<Integer> timeDim = new ArrayList<>();
+    public List<Integer> timeThresh = new ArrayList<>();
+    public List<Integer> timeDown = new ArrayList<>();
+    public List<Integer> timeDecoding = new ArrayList<>();
+    public List<Integer> timeSync = new ArrayList<>();
 
 
     private StorageManager() {
@@ -86,13 +87,28 @@ public class StorageManager {
 
     public void resetTempData() {
         dataStream.clear();
-        timeAcquireImage.clear();
-        timeAcquireIdle.clear();
+        timeAll.clear();
+        timeROI.clear();
+        timeDim.clear();
+        timeThresh.clear();
+        timeDown.clear();
+        timeDecoding.clear();
+        timeSync.clear();
+
         counterCommunicationFinished = 0;
         counterPut=0;
         counterImages=0;
-        counterThreadsFinished=0;
-        counterThreadsStarted=0;
+
+    }
+
+    public void setTime(Integer all, Integer roi, Integer dim, Integer thresh, Integer down, Integer decoding, Integer sync) {
+        timeAll.add(all);
+        timeROI.add(roi);
+        timeDim.add(dim);
+        timeThresh.add(thresh);
+        timeDown.add(down);
+        timeDecoding.add(decoding);
+        timeSync.add(sync);
     }
 
 
