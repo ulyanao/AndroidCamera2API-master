@@ -648,7 +648,7 @@ public class MainActivity extends AppCompatActivity {
 
             //Constants
             //The step size for the rows
-            int STEP_ROI_ROW = 25;
+            int STEP_ROI_ROW = 300;
             //The step size for the pixels in a row or respectively the columns
             int STEP_ROI_PIXEL = 8;
             //The to exceeding difference to count a difference in the light intensity as a stripe
@@ -1365,18 +1365,20 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            //Save processing time
-            timeSync = System.nanoTime();
+            if (StorageManager.getInstance().counterCommunicationFinished != StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER) {
+                //Save processing time
+                timeSync = System.nanoTime();
 
-            //Save the time
-            StorageManager.getInstance().setTimeLists(new int[] {
-                    (int)(timeSync-timeStart)/TIME_FORMAT,
-                    (int)(timeROI-timeStart)/TIME_FORMAT,
-                    (int)(timeDim-timeROI)/TIME_FORMAT,
-                    (int)(timeThresh-timeDim)/TIME_FORMAT,
-                    (int)(timeDown-timeThresh)/TIME_FORMAT,
-                    (int)(timeDecoding-timeDown)/TIME_FORMAT,
-                    (int)(timeSync-timeDecoding)/TIME_FORMAT});
+                //Save the time
+                StorageManager.getInstance().setTimeLists(new int[] {
+                        (int)(timeSync-timeStart)/TIME_FORMAT,
+                        (int)(timeROI-timeStart)/TIME_FORMAT,
+                        (int)(timeDim-timeROI)/TIME_FORMAT,
+                        (int)(timeThresh-timeDim)/TIME_FORMAT,
+                        (int)(timeDown-timeThresh)/TIME_FORMAT,
+                        (int)(timeDecoding-timeDown)/TIME_FORMAT,
+                        (int)(timeSync-timeDecoding)/TIME_FORMAT});
+            }
         }
         //The mapping for 4Bit6Bit
         private byte decode4Bit6Bit(byte dataCoded) {
