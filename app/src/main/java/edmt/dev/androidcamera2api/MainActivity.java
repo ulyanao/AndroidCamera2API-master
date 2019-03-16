@@ -382,7 +382,7 @@ public class MainActivity extends AppCompatActivity {
                         //Pass the image data to the worker thread for further processing
                         try {
                             //Accessing the thread pool and sending the received image data to a worker thread
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data.clone()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableTest());
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -571,7 +571,11 @@ public class MainActivity extends AppCompatActivity {
                 savedDataBuffer[1] = message;
                 savedDataBuffer[2] = String.valueOf(StorageManager.getInstance().timeThroughPut);
                 savedDataBuffer[3] = String.valueOf(StorageManager.getInstance().timeGoodPut);
-                savedDataBuffer[4] = String.valueOf(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages);
+                if(StorageManager.getInstance().counterImages!=0) {
+                    savedDataBuffer[4] = String.valueOf(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages);
+                } else {
+                    savedDataBuffer[4] = "-";
+                }
                 //Offset where to start with remaining data to be added to list (here 5 since 5 elements already added)
                 int dataOffset = StorageManager.getInstance().BASIC_DATA_LENGTH;
 
@@ -580,12 +584,17 @@ public class MainActivity extends AppCompatActivity {
                 long[] averageTimeBuffer = new long[timeList.size()];
 
                 for (int i=0;i<averageTimeBuffer.length;i++) {
-                    for (int n=0;n<timeList.get(i).size();n++) {
-                        averageTimeBuffer[i]+=timeList.get(i).get(n);
+                    if(timeList.get(i).size()!=0) {
+                        for (int n=0;n<timeList.get(i).size();n++) {
+                            averageTimeBuffer[i]+=timeList.get(i).get(n);
+                        }
+                        averageTimeBuffer[i]/=timeList.get(i).size();
+                        //Save the average value to the final data list
+                        savedDataBuffer[i+dataOffset] = String.valueOf(averageTimeBuffer[i]/StorageManager.getInstance().TIME_COMMA);
+                    } else {
+                        savedDataBuffer[i+dataOffset] = "-";
                     }
-                    averageTimeBuffer[i]/=timeList.get(i).size();
-                    //Save the average value to the final data list
-                    savedDataBuffer[i+dataOffset] = String.valueOf(averageTimeBuffer[i]/StorageManager.getInstance().TIME_COMMA);
+
                 }
 
                 //Add data to storage manager
@@ -609,6 +618,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
+    private class RunnableTest implements Runnable {
+
+
+        @Override
+        public void run() {
+            StorageManager.getInstance().counterTest++;
+            if(StorageManager.getInstance().counterTest>=20) {
+                //Start a new thread to prepare the displaying of the message
+                ThreadSaveData threadSaveData = new ThreadSaveData();
+                threadSaveData.start();
+            }
+        }
+    }
 
     private class RunnableProcessingData implements Runnable {
         //Variables

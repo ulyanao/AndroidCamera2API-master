@@ -25,11 +25,12 @@ public class StorageManager {
 
     //The time management
     //through and good put
-    public long timeStartRecording;
-    public long timeThroughPut;
-    public long timeGoodPut;
+    public long timeStartRecording = 0;
+    public long timeThroughPut = 0;
+    public long timeGoodPut = 0;
     public int counterPut = 0;
     public int counterImages = 0;
+    public int counterTest = 0;
     //time per picture
     public long timeEndPicture = 0;
     //Processing time List
@@ -93,6 +94,7 @@ public class StorageManager {
         counterPut=0;
         counterImages=0;
         timeEndPicture = 0;
+        counterTest = 0;
 
     }
 
