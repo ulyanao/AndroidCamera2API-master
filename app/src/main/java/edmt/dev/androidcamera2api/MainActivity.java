@@ -382,7 +382,7 @@ public class MainActivity extends AppCompatActivity {
                         //Pass the image data to the worker thread for further processing
                         try {
                             //Accessing the thread pool and sending the received image data to a worker thread
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data.clone()));
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
