@@ -382,7 +382,7 @@ public class MainActivity extends AppCompatActivity {
                         //Pass the image data to the worker thread for further processing
                         try {
                             //Accessing the thread pool and sending the received image data to a worker thread
-                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableTest());
+                            ThreadManager.getInstance().getmDecoderThreadPool().execute(new RunnableProcessingData(data));
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
@@ -643,6 +643,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
+            StorageManager.getInstance().counterTest++;
             //Save time
             long timeStart = System.nanoTime();
             long timeROI;
@@ -1396,6 +1397,31 @@ public class MainActivity extends AppCompatActivity {
                             break;
                         }
                     }
+                    /*
+                    if (StorageManager.getInstance().counterTest >= 20) {
+                        StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStartRecording)/1000000;
+                        //Stop the recording of new frames
+                        recordingData = false;
+                        //Set TimerID to hinder executing timer task
+                        TimerID++;
+
+                        //Start a new thread to prepare the displaying of the message
+                        ThreadSaveData threadSaveData = new ThreadSaveData();
+                        threadSaveData.start();
+
+                        //Execute task on UI thread to change UI elements
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                //Disable capture button and set the color back to non recording mode
+                                btnCapture.setClickable(false);
+                                btnCapture.setBackgroundColor(Color.WHITE);
+                                btnCapture.setText(BUTTON_STRING_OFF);
+                            }
+                        });
+
+                        //Stop the loop to hinder the processing of more blocks
+                    }*/
                 }
             }
 
