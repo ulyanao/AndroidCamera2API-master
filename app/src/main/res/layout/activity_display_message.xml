@@ -74,36 +74,46 @@
 
                         <TextView
                             android:layout_column="5"
-                            android:text="Average Thread [ms]:"
+                            android:text="Time/Picture 2.0 [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="6"
-                            android:text="ROI [ms]"
+                            android:text="Idle Time after Picture [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="7"
-                            android:text="1Dim [ms]"
+                            android:text="Average Thread [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="8"
-                            android:text="Thresh [ms]"
+                            android:text="ROI [ms]"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="9"
-                            android:text="Down [ms]"
+                            android:text="1Dim [ms]"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="10"
-                            android:text="Decode [ms]"
+                            android:text="Thresh [ms]"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="11"
+                            android:text="Down [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="12"
+                            android:text="Decode [ms]"
+                            android:layout_margin="10dip" />
+
+                        <TextView
+                            android:layout_column="13"
                             android:text="Saving [ms]"
                             android:layout_margin="10dip" />
 

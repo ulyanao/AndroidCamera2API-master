@@ -17,7 +17,6 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -31,9 +30,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -364,6 +361,15 @@ public class MainActivity extends AppCompatActivity {
 
                     //Check if recording mode is on / the transmission has started
                     if (recordingData) {
+                        //Save the start time
+                        long startTime = System.nanoTime();
+                        //Time format
+                        int timeFormat = StorageManager.getInstance().TIME_DIVIDE_BY;
+                        //Save the idle time
+                        long lastEndTime;
+                        if((lastEndTime = StorageManager.getInstance().timeEndPicture) != 0) {
+                            StorageManager.getInstance().setTimeLists(new int[] {(int) (startTime-lastEndTime)/timeFormat},1);
+                        }
                         //Count images for average processing time
                         StorageManager.getInstance().counterImages++;
 
@@ -380,6 +386,10 @@ public class MainActivity extends AppCompatActivity {
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+                        //Save the time per picture and the end time
+                        long endTime = System.nanoTime();
+                        StorageManager.getInstance().timeEndPicture = endTime;
+                        StorageManager.getInstance().setTimeLists(new int[] {(int) (endTime-startTime)/timeFormat},0);
                     }else{
                         //If recording mode is off, close the image immediately
                         image.close();
@@ -486,7 +496,7 @@ public class MainActivity extends AppCompatActivity {
                 updatePreview();
 
                 //Start decoding the information
-                StorageManager.getInstance().timeStart = System.nanoTime();
+                StorageManager.getInstance().timeStartRecording = System.nanoTime();
                 recordingData=true;
 
                 //Starts a new timer to check timeout for decoding
@@ -562,6 +572,8 @@ public class MainActivity extends AppCompatActivity {
                 savedDataBuffer[2] = String.valueOf(StorageManager.getInstance().timeThroughPut);
                 savedDataBuffer[3] = String.valueOf(StorageManager.getInstance().timeGoodPut);
                 savedDataBuffer[4] = String.valueOf(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages);
+                //Offset where to start with remaining data to be added to list (here 5 since 5 elements already added)
+                int dataOffset = StorageManager.getInstance().BASIC_DATA_LENGTH;
 
                 //Calculate Average and add the time data to string
                 List<ArrayList<Integer>> timeList = StorageManager.getInstance().getTimeLists();
@@ -572,7 +584,8 @@ public class MainActivity extends AppCompatActivity {
                         averageTimeBuffer[i]+=timeList.get(i).get(n);
                     }
                     averageTimeBuffer[i]/=timeList.get(i).size();
-                    savedDataBuffer[i+5] = String.valueOf(averageTimeBuffer[i]/10.0);
+                    //Save the average value to the final data list
+                    savedDataBuffer[i+dataOffset] = String.valueOf(averageTimeBuffer[i]/StorageManager.getInstance().TIME_COMMA);
                 }
 
                 //Add data to storage manager
@@ -616,7 +629,8 @@ public class MainActivity extends AppCompatActivity {
             long timeDown;
             long timeDecoding;
             long timeSync;
-            final int TIME_FORMAT = 100000;
+            //Divide by this to change from nano seconds
+            final int TIME_DIVIDE_BY = StorageManager.getInstance().TIME_DIVIDE_BY;
 
             //Initialization
             byte[] dataPlanes = this.data;
@@ -756,8 +770,6 @@ public class MainActivity extends AppCompatActivity {
 
             //Check if ROI found otherwise discard frame
             if(consecutiveStripesHighestAll<MINIMUM_CONSECUTIVE_STRIPES) {
-                //Save the time
-                //StorageManager.getInstance().setTimeLists((int) (timeROI-timeStart)/TIME_FORMAT, -10,-10,-10,-10,-10,-10);
                 return;
             }
 
@@ -1332,12 +1344,12 @@ public class MainActivity extends AppCompatActivity {
                         }
                         if(StorageManager.getInstance().counterPut==StorageManager.getInstance().MESSAGE_LENGTH) {
                             StorageManager.getInstance().counterPut++;
-                            StorageManager.getInstance().timeThroughPut = (System.nanoTime() - StorageManager.getInstance().timeStart) / 1000000;
+                            StorageManager.getInstance().timeThroughPut = (System.nanoTime() - StorageManager.getInstance().timeStartRecording) / 1000000;
                         }
 
                         //After every block, check if the message is completed
                         if (StorageManager.getInstance().counterCommunicationFinished == StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER) {
-                            StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStart)/1000000;
+                            StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStartRecording)/1000000;
                             //Stop the recording of new frames
                             recordingData = false;
                             //Set TimerID to hinder executing timer task
@@ -1371,13 +1383,13 @@ public class MainActivity extends AppCompatActivity {
 
                 //Save the time
                 StorageManager.getInstance().setTimeLists(new int[] {
-                        (int)(timeSync-timeStart)/TIME_FORMAT,
-                        (int)(timeROI-timeStart)/TIME_FORMAT,
-                        (int)(timeDim-timeROI)/TIME_FORMAT,
-                        (int)(timeThresh-timeDim)/TIME_FORMAT,
-                        (int)(timeDown-timeThresh)/TIME_FORMAT,
-                        (int)(timeDecoding-timeDown)/TIME_FORMAT,
-                        (int)(timeSync-timeDecoding)/TIME_FORMAT});
+                        (int)(timeSync-timeStart)/TIME_DIVIDE_BY,
+                        (int)(timeROI-timeStart)/TIME_DIVIDE_BY,
+                        (int)(timeDim-timeROI)/TIME_DIVIDE_BY,
+                        (int)(timeThresh-timeDim)/TIME_DIVIDE_BY,
+                        (int)(timeDown-timeThresh)/TIME_DIVIDE_BY,
+                        (int)(timeDecoding-timeDown)/TIME_DIVIDE_BY,
+                        (int)(timeSync-timeDecoding)/TIME_DIVIDE_BY},2);
             }
         }
         //The mapping for 4Bit6Bit
