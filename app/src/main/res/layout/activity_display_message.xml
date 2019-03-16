@@ -69,22 +69,22 @@
 
                         <TextView
                             android:layout_column="4"
-                            android:text="Time/Picture [ms]"
+                            android:text="Goodput/CountOfPictures [ms]"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="5"
-                            android:text="Time/Picture 2.0 [ms]:"
+                            android:text="Time/Image [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="6"
-                            android:text="Idle Time after Picture [ms]:"
+                            android:text="Time Idle after Image [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
                             android:layout_column="7"
-                            android:text="Average Thread [ms]:"
+                            android:text="Total Time/Worker-Thread [ms]:"
                             android:layout_margin="10dip" />
 
                         <TextView
