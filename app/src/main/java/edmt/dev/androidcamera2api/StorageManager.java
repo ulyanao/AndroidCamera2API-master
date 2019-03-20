@@ -33,7 +33,7 @@ public class StorageManager {
     //time per picture
     public long timeEndPicture = 0;
     //Processing time List
-    private List<ArrayList<Integer>> timeData = new ArrayList<>();
+    private List<ArrayList<Long>> timeData = new ArrayList<>();
     //Length of the timeData List
     private final static int TIME_DATA_LENGTH = 9;
     //Time format (nano seconds divided by)
@@ -51,7 +51,7 @@ public class StorageManager {
 
         //Adds the initial Integer Lists to the time list
         for(int i=0;i<TIME_DATA_LENGTH;i++) {
-            timeData.add(new ArrayList<Integer>());
+            timeData.add(new ArrayList<Long>());
         }
 
         //Adds the initial String lists to the savedData list
@@ -84,7 +84,7 @@ public class StorageManager {
         dataStream.clear();
 
         //Empty the time lists
-        for (ArrayList<Integer> data : timeData
+        for (ArrayList<Long> data : timeData
              ) {
             data.clear();
         }
@@ -96,13 +96,13 @@ public class StorageManager {
 
     }
 
-    public void setTimeLists(int[] data, int positionInList) {
+    public void setTimeLists(long[] data, int positionInList) {
         for(int i = 0; i < data.length && i < timeData.size();i++) {
             timeData.get(i+positionInList).add(data[i]);
         }
     }
 
-    public List<ArrayList<Integer>> getTimeLists() {
+    public List<ArrayList<Long>> getTimeLists() {
         return timeData;
     }
 

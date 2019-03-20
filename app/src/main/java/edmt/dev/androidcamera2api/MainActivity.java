@@ -81,12 +81,13 @@ public class MainActivity extends AppCompatActivity {
     //The Boolean to check if the recording mode is on or off
     public boolean recordingData = false;
     //The Boolean to track the button status
-    public boolean recordingMode = recordingData;
+    public boolean recordingMode = false;
+    //We need this two variables, since the recording mode starts without recording data, since the flash is on first
 
     //An ID to keep track of the current timer task
     private int TimerID = 0;
-    private static final int FLASH_TIME = 500;
-    private static final int TIME_OUT_LENGTH = 5000;
+    private static final int FLASH_TIME = 500;  //in ms
+    private static final int TIME_OUT_LENGTH = 5000;    //in ms
 
 
     //Callback of camera device
@@ -368,7 +369,7 @@ public class MainActivity extends AppCompatActivity {
                         //Save the idle time
                         long lastEndTime;
                         if((lastEndTime = StorageManager.getInstance().timeEndPicture) != 0) {
-                            StorageManager.getInstance().setTimeLists(new int[] {(int) (startTime-lastEndTime)/timeFormat},1);
+                            StorageManager.getInstance().setTimeLists(new long[] {(startTime-lastEndTime)/timeFormat},1);
                         }
                         //Count images for average processing time
                         StorageManager.getInstance().counterImages++;
@@ -389,7 +390,7 @@ public class MainActivity extends AppCompatActivity {
                         //Save the time per picture and the end time
                         long endTime = System.nanoTime();
                         StorageManager.getInstance().timeEndPicture = endTime;
-                        StorageManager.getInstance().setTimeLists(new int[] {(int) (endTime-startTime)/timeFormat},0);
+                        StorageManager.getInstance().setTimeLists(new long[] { (endTime-startTime)/timeFormat},0);
                     }else{
                         //If recording mode is off, close the image immediately
                         image.close();
@@ -439,6 +440,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         //Is called if the application is paused
+        //Stop everything by using the stop button function
+        //Enable recording mode to start stop function when performing a click
+        recordingMode=true;
+        //Perform the click
+        btnCapture.performClick();
+        //Stop rest
         stopBackgroundThread();
         super.onPause();
     }
@@ -580,7 +587,7 @@ public class MainActivity extends AppCompatActivity {
                 int dataOffset = StorageManager.getInstance().BASIC_DATA_LENGTH;
 
                 //Calculate Average and add the time data to string
-                List<ArrayList<Integer>> timeList = StorageManager.getInstance().getTimeLists();
+                List<ArrayList<Long>> timeList = StorageManager.getInstance().getTimeLists();
                 long[] averageTimeBuffer = new long[timeList.size()];
 
                 for (int i=0;i<averageTimeBuffer.length;i++) {
@@ -1361,6 +1368,7 @@ public class MainActivity extends AppCompatActivity {
                             StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStartRecording)/1000000;
                             //Stop the recording of new frames
                             recordingData = false;
+                            recordingMode = false;
                             //Set TimerID to hinder executing timer task
                             TimerID++;
 
@@ -1391,14 +1399,14 @@ public class MainActivity extends AppCompatActivity {
                 timeSync = System.nanoTime();
 
                 //Save the time
-                StorageManager.getInstance().setTimeLists(new int[] {
-                        (int)(timeSync-timeStart)/TIME_DIVIDE_BY,
-                        (int)(timeROI-timeStart)/TIME_DIVIDE_BY,
-                        (int)(timeDim-timeROI)/TIME_DIVIDE_BY,
-                        (int)(timeThresh-timeDim)/TIME_DIVIDE_BY,
-                        (int)(timeDown-timeThresh)/TIME_DIVIDE_BY,
-                        (int)(timeDecoding-timeDown)/TIME_DIVIDE_BY,
-                        (int)(timeSync-timeDecoding)/TIME_DIVIDE_BY},2);
+                StorageManager.getInstance().setTimeLists(new long[] {
+                        (timeSync-timeStart)/TIME_DIVIDE_BY,
+                        (timeROI-timeStart)/TIME_DIVIDE_BY,
+                        (timeDim-timeROI)/TIME_DIVIDE_BY,
+                        (timeThresh-timeDim)/TIME_DIVIDE_BY,
+                        (timeDown-timeThresh)/TIME_DIVIDE_BY,
+                        (timeDecoding-timeDown)/TIME_DIVIDE_BY,
+                        (timeSync-timeDecoding)/TIME_DIVIDE_BY},2);
             }
         }
         //The mapping for 4Bit6Bit
