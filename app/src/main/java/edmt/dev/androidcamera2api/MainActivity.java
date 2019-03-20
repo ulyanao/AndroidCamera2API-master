@@ -34,7 +34,9 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -445,8 +447,12 @@ public class MainActivity extends AppCompatActivity {
                     //The binary data after the downsampling step
                     int[] dataBinary = imageData.dataTest.get(1);
 
+                    Calendar c = Calendar.getInstance();
+                    SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yy HH:mm:ss");
+                    String datetime = dateFormat.format(c.getTime());
+
                     //Set up a storage path for the final spread sheet, include the exposure time and the sensitivity in file name
-                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/Exp_" + exposureTime + "_Sens_" + sensitivity + ".csv");
+                    File file = new File(Environment.getExternalStorageDirectory()+"/yuv/"+datetime+" Exp_" + exposureTime + "_Sens_" + sensitivity + ".csv");
                     //Set up a file writer
                     FileWriter fileWriter = null;
                     try{
