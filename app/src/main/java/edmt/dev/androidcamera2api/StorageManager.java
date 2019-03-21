@@ -26,20 +26,19 @@ public class StorageManager {
     //The time management
     //through and good put
     public long timeStartRecording = 0;
-    public long timeThroughPut = 0;
-    public long timeGoodPut = 0;
+    public double timeThroughPut = 0;
+    public double timeGoodPut = 0;
     public int counterPut = 0;
     public int counterImages = 0;
     //time per picture
     public long timeEndPicture = 0;
     //Processing time List
-    private List<ArrayList<Long>> timeData = new ArrayList<>();
+    private List<ArrayList<Double>> timeData = new ArrayList<>();
     //Length of the timeData List
     private final static int TIME_DATA_LENGTH = 9;
     //Time format (nano seconds divided by)
-    public final int TIME_DIVIDE_BY = 100000;   //in 10^-4 s
-    //Set the point
-    public final double TIME_COMMA = 10.0;  //to get ms e.g.: 23.2 ms
+    public final double TIME_DIVIDE_BY = 1000000.0;   //from nano seconds (10^-9) to 10^-3 s
+
 
     private StorageManager() {
         //Set the finished parameter according to the message length
@@ -51,7 +50,7 @@ public class StorageManager {
 
         //Adds the initial Integer Lists to the time list
         for(int i=0;i<TIME_DATA_LENGTH;i++) {
-            timeData.add(new ArrayList<Long>());
+            timeData.add(new ArrayList<Double>());
         }
 
         //Adds the initial String lists to the savedData list
@@ -84,7 +83,7 @@ public class StorageManager {
         dataStream.clear();
 
         //Empty the time lists
-        for (ArrayList<Long> data : timeData
+        for (ArrayList<Double> data : timeData
              ) {
             data.clear();
         }
@@ -96,13 +95,13 @@ public class StorageManager {
 
     }
 
-    public void setTimeLists(long[] data, int positionInList) {
+    public void setTimeLists(Double[] data, int positionInList) {
         for(int i = 0; i < data.length && i < timeData.size();i++) {
             timeData.get(i+positionInList).add(data[i]);
         }
     }
 
-    public List<ArrayList<Long>> getTimeLists() {
+    public List<ArrayList<Double>> getTimeLists() {
         return timeData;
     }
 

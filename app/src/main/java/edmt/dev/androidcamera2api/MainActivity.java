@@ -31,6 +31,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -365,11 +366,11 @@ public class MainActivity extends AppCompatActivity {
                         //Save the start time
                         long startTime = System.nanoTime();
                         //Time format
-                        int timeFormat = StorageManager.getInstance().TIME_DIVIDE_BY;
+                        double timeFormat = StorageManager.getInstance().TIME_DIVIDE_BY;
                         //Save the idle time
                         long lastEndTime;
                         if((lastEndTime = StorageManager.getInstance().timeEndPicture) != 0) {
-                            StorageManager.getInstance().setTimeLists(new long[] {(startTime-lastEndTime)/timeFormat},1);
+                            StorageManager.getInstance().setTimeLists(new Double[] {(startTime-lastEndTime)/timeFormat},1);
                         }
                         //Count images for average processing time
                         StorageManager.getInstance().counterImages++;
@@ -390,7 +391,7 @@ public class MainActivity extends AppCompatActivity {
                         //Save the time per picture and the end time
                         long endTime = System.nanoTime();
                         StorageManager.getInstance().timeEndPicture = endTime;
-                        StorageManager.getInstance().setTimeLists(new long[] { (endTime-startTime)/timeFormat},0);
+                        StorageManager.getInstance().setTimeLists(new Double[] { (endTime-startTime)/timeFormat},0);
                     }else{
                         //If recording mode is off, close the image immediately
                         image.close();
@@ -572,14 +573,20 @@ public class MainActivity extends AppCompatActivity {
                 SimpleDateFormat dateFormat = new SimpleDateFormat("dd.MM.yy HH:mm:ss");
                 String datetime = dateFormat.format(c.getTime());
 
+                //Format
+                DecimalFormat formatProcessingTime = new DecimalFormat("####0.00");
+
+                //Format
+                DecimalFormat formatDataTime = new DecimalFormat("#####0");
+
                 //Prepare String with main data
                 String[] savedDataBuffer = new String[StorageManager.getInstance().getData().size()];
                 savedDataBuffer[0] = datetime;
                 savedDataBuffer[1] = message;
-                savedDataBuffer[2] = String.valueOf(StorageManager.getInstance().timeThroughPut);
-                savedDataBuffer[3] = String.valueOf(StorageManager.getInstance().timeGoodPut);
+                savedDataBuffer[2] = String.valueOf(formatDataTime.format(StorageManager.getInstance().timeThroughPut));
+                savedDataBuffer[3] = String.valueOf(formatDataTime.format(StorageManager.getInstance().timeGoodPut));
                 if(StorageManager.getInstance().counterImages!=0) {
-                    savedDataBuffer[4] = String.valueOf(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages);
+                    savedDataBuffer[4] = String.valueOf(formatProcessingTime.format(StorageManager.getInstance().timeGoodPut/StorageManager.getInstance().counterImages));
                 } else {
                     savedDataBuffer[4] = "-";
                 }
@@ -587,8 +594,10 @@ public class MainActivity extends AppCompatActivity {
                 int dataOffset = StorageManager.getInstance().BASIC_DATA_LENGTH;
 
                 //Calculate Average and add the time data to string
-                List<ArrayList<Long>> timeList = StorageManager.getInstance().getTimeLists();
-                long[] averageTimeBuffer = new long[timeList.size()];
+                List<ArrayList<Double>> timeList = StorageManager.getInstance().getTimeLists();
+                double[] averageTimeBuffer = new double[timeList.size()];
+
+
 
                 for (int i=0;i<averageTimeBuffer.length;i++) {
                     if(timeList.get(i).size()!=0) {
@@ -597,7 +606,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         averageTimeBuffer[i]/=timeList.get(i).size();
                         //Save the average value to the final data list
-                        savedDataBuffer[i+dataOffset] = String.valueOf(averageTimeBuffer[i]/StorageManager.getInstance().TIME_COMMA);
+                        savedDataBuffer[i+dataOffset] = String.valueOf(formatProcessingTime.format(averageTimeBuffer[i]));
                     } else {
                         savedDataBuffer[i+dataOffset] = "-";
                     }
@@ -646,7 +655,7 @@ public class MainActivity extends AppCompatActivity {
             long timeDecoding;
             long timeSync;
             //Divide by this to change from nano seconds
-            final int TIME_DIVIDE_BY = StorageManager.getInstance().TIME_DIVIDE_BY;
+            final double TIME_DIVIDE_BY = StorageManager.getInstance().TIME_DIVIDE_BY;
 
             //Initialization
             byte[] dataPlanes = this.data;
@@ -1360,12 +1369,12 @@ public class MainActivity extends AppCompatActivity {
                         }
                         if(StorageManager.getInstance().counterPut==StorageManager.getInstance().MESSAGE_LENGTH) {
                             StorageManager.getInstance().counterPut++;
-                            StorageManager.getInstance().timeThroughPut = (System.nanoTime() - StorageManager.getInstance().timeStartRecording) / 1000000;
+                            StorageManager.getInstance().timeThroughPut = (System.nanoTime() - StorageManager.getInstance().timeStartRecording) / TIME_DIVIDE_BY;
                         }
 
                         //After every block, check if the message is completed
                         if (StorageManager.getInstance().counterCommunicationFinished == StorageManager.getInstance().COMMUNICATION_FINISHED_PARAMETER) {
-                            StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStartRecording)/1000000;
+                            StorageManager.getInstance().timeGoodPut = (System.nanoTime()-StorageManager.getInstance().timeStartRecording)/TIME_DIVIDE_BY;
                             //Stop the recording of new frames
                             recordingData = false;
                             recordingMode = false;
@@ -1399,7 +1408,7 @@ public class MainActivity extends AppCompatActivity {
                 timeSync = System.nanoTime();
 
                 //Save the time
-                StorageManager.getInstance().setTimeLists(new long[] {
+                StorageManager.getInstance().setTimeLists(new Double[] {
                         (timeSync-timeStart)/TIME_DIVIDE_BY,
                         (timeROI-timeStart)/TIME_DIVIDE_BY,
                         (timeDim-timeROI)/TIME_DIVIDE_BY,
