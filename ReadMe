@@ -1,0 +1,7 @@
+This is a short explanation:
+1. master branch and test branch are the main branches
+2. test branch is used for test and is merged to master after tests
+2. decoding 1 branch is used as the development branch to print out a csv file with information;
+    use it as follows to analyze the data:
+        Copy the first 5 columns from A to E and replace them with the first 5 columns in the Template.xlsx in the root project folder in VLC Data Template
+        Now the graphs will show the results
