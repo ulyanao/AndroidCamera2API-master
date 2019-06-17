@@ -566,7 +566,8 @@ public class MainActivity extends AppCompatActivity {
 
                 //Access the bytes of the dataStream list and save theses as characters to the message string
                 for(int i=0; i<StorageManager.getInstance().dataStream.size();i++) {
-                    message = message + String.valueOf((char) (byte) StorageManager.getInstance().dataStream.get(i));
+                 //   message = message + String.valueOf((char) (byte) StorageManager.getInstance().dataStream.get(i)); add (char) to convert askii code to letters
+                    message = message + String.valueOf((byte) StorageManager.getInstance().dataStream.get(i))+" ";
                 }
 
                 Calendar c = Calendar.getInstance();
